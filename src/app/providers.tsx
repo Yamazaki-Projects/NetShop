@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -42,7 +41,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const publicPaths = ['/login', '/register'];
-    if (!user && !publicPaths.includes(pathname)) {
+    const safePathname: string = pathname ?? '';
+    if (!user && !publicPaths.includes(safePathname)) {
       router.push('/login');
     }
   }, [user, pathname, router]);
