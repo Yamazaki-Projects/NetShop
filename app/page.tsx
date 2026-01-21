@@ -37,7 +37,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard title="総案件数" value={stats.total} icon="fa-folder" color="blue" />
           <StatCard title="審査中 / 提出済み" value={stats.pending} icon="fa-clock" color="amber" />
@@ -46,7 +45,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Activities */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-text-main dark:text-text-darkMain">最近の更新案件</h2>

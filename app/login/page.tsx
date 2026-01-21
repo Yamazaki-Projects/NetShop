@@ -8,7 +8,7 @@ import { db } from '../../services/dbService';
 import { Card, Button, Input } from '../../components/UI';
 
 export default function LoginPage() {
-  const { setUser, isDarkMode } = useAppContext();
+  const { setUser } = useAppContext();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -22,7 +22,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row dark:bg-bg-darkMain`}>
-      {/* Sidebar */}
       <aside className={`
         ${isSidebarOpen ? 'w-64' : 'w-20'} 
         bg-bg-sub dark:bg-bg-darkSub border-r border-slate-200 dark:border-slate-800 

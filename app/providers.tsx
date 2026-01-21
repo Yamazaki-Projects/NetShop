@@ -27,7 +27,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Initial theme setup
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setIsDarkMode(true);
     }

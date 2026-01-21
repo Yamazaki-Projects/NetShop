@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { CaseStatus, TaskStatus } from './types';
 
 export const STATUS_COLORS: Record<CaseStatus, string> = {

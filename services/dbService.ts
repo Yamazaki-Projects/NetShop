@@ -31,11 +31,9 @@ class DBService {
   private invites: InviteInfo[] = [];
 
   login(email: string, pass: string): User | undefined {
-    // 規定のシステム管理者
     if (email === 'api18958@gmail.com' && pass === 'aaaa1111') {
       return this.users.find(u => u.email === email);
     }
-    // その他のモックユーザー用（簡易パスワードチェックなしログイン）
     return this.users.find(u => u.email === email);
   }
 
@@ -125,7 +123,6 @@ class DBService {
 
   getAuditLogs() { return [...this.auditLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); }
 
-  // 招待機能
   generateInvite(type: UserRole, actor: User): string {
     const code = Math.random().toString(36).substr(2, 10).toUpperCase();
     const invite: InviteInfo = {
@@ -166,7 +163,6 @@ class DBService {
       this.agencies.push(newAgency);
       newUser.agencyId = newAgency.id;
       
-      // ルール：システム管理者の代理店（ag1）の下に紐付ける
       this.referrals.push({
         parentAgencyId: 'ag1',
         childAgencyId: newAgency.id,
@@ -175,7 +171,6 @@ class DBService {
     }
 
     this.users.push(newUser);
-    // 招待を使用済みに（モックなので削除）
     this.invites = this.invites.filter(i => i.code !== code);
     
     this.logAction(newUser, '新規登録完了', 'user', newUser.id, { role: newUser.role });

@@ -34,7 +34,7 @@ export interface User {
   id: string;
   email: string;
   role: UserRole;
-  agencyId?: string; // Only for agency users
+  agencyId?: string;
   name: string;
 }
 
