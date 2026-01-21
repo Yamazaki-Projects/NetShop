@@ -41,11 +41,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [isDarkMode]);
 
   useEffect(() => {
-    const publicPaths = ['/login', '/register'];
-    if (!user && !publicPaths.includes(pathname)) {
-      router.push('/login');
-    }
-  }, [user, pathname, router]);
+  const publicPaths = ['/login', '/register'];
+  const safePathname = pathname ?? '';
+  if (!user && !publicPaths.includes(safePathname)) {
+    router.push('/login');
+  }
+}, [user, pathname, router]);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
