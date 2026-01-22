@@ -1,5 +1,5 @@
 {
   "name": "NetShop Partner Management System",
-  "description": "A comprehensive B2B management platform for net shop co-operations, featuring hierarchical agency visibility, case workflow management, and audit logging.",
+  "description": "Vite + React SPA 構成に刷新した代理店管理システム",
   "requestFramePermissions": []
 }
