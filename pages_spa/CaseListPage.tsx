@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../App';
@@ -17,9 +16,10 @@ const CaseListPage = () => {
 
   const filteredCases = useMemo(() => {
     return cases.filter(c => {
-      const matchesSearch = c.customerName.toLowerCase().includes(search.toLowerCase()) || 
-                           (c.companyName?.toLowerCase().includes(search.toLowerCase())) ||
-                           c.agencyName.toLowerCase().includes(search.toLowerCase());
+      const searchLower = search.toLowerCase();
+      const matchesSearch = c.customerName.toLowerCase().includes(searchLower) || 
+                           (c.companyName?.toLowerCase().includes(searchLower)) ||
+                           c.agencyName.toLowerCase().includes(searchLower);
       const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
       const matchesPlatform = platformFilter === 'all' || c.platform === platformFilter;
       return matchesSearch && matchesStatus && matchesPlatform;
@@ -27,85 +27,100 @@ const CaseListPage = () => {
   }, [cases, search, statusFilter, platformFilter]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-main dark:text-text-darkMain">案件一覧</h1>
-          <p className="text-text-sub dark:text-text-darkSub">
-            {user?.role === 'admin' ? '全代理店の案件を管理します' : '担当および傘下代理店の案件を閲覧できます'}
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-slide-in">
+      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '40px' }}>
+        <div style={{ textAlign: 'left' }}>
+          <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', marginBottom: '8px' }}>案件管理</h1>
+          <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>
+            {user?.role === 'admin' ? '全代理店から提出された案件の審査と進捗確認' : 'あなたの登録した案件および傘下代理店の案件'}
           </p>
         </div>
         {user?.role === 'agency' && (
           <Link to="/cases/new">
-            <Button><i className="fa-solid fa-plus mr-2"></i>新規案件作成</Button>
+            <Button><i className="fa-solid fa-plus-circle"></i>新規登録</Button>
           </Link>
         )}
       </header>
 
-      <Card className="p-4 bg-bg-sub dark:bg-bg-darkSub border-none">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <Input 
-            placeholder="顧客名、会社名、代理店名で検索..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">すべてのステータス</option>
-            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </Select>
-          <Select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)}>
-            <option value="all">すべてのプラットフォーム</option>
-            {Object.values(PlatformType).map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </Select>
-        </div>
-      </Card>
+      <div style={{ 
+        background: 'var(--bg-card)', 
+        padding: '28px', 
+        borderRadius: '20px', 
+        border: '1px solid var(--border)', 
+        marginBottom: '32px',
+        display: 'grid',
+        gridTemplateColumns: '2fr 1fr 1fr',
+        gap: '20px',
+        boxShadow: 'var(--shadow-sm)'
+      }}>
+        <Input 
+          placeholder="顧客名、会社名、代理店名で検索..." 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ marginBottom: 0 }}
+        />
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginBottom: 0 }}>
+          <option value="all">すべてのステータス</option>
+          {Object.entries(STATUS_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </Select>
+        <Select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} style={{ marginBottom: 0 }}>
+          <option value="all">すべてのPF</option>
+          {Object.values(PlatformType).map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </Select>
+      </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div style={{ overflowX: 'auto' }}>
+          <table>
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">顧客情報</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">プラットフォーム</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">担当代理店</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-center">ステータス</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-right">登録日</th>
-                <th className="px-6 py-4"></th>
+              <tr>
+                <th className="align-left" style={{ width: '30%' }}>顧客・会社情報</th>
+                <th className="align-left">PF</th>
+                <th className="align-left">担当代理店</th>
+                <th className="align-center">ステータス</th>
+                <th className="align-right">登録日</th>
+                <th style={{ width: '80px' }}></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody>
               {filteredCases.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-text-main dark:text-text-darkMain">{c.customerName}</p>
-                    {c.companyName && <p className="text-xs text-text-sub dark:text-text-darkSub">{c.companyName}</p>}
+                <tr key={c.id}>
+                  <td className="align-left">
+                    <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.95rem' }}>{c.customerName}</div>
+                    {c.companyName && <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600, marginTop: '2px' }}>{c.companyName}</div>}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-medium text-text-main dark:text-text-darkMain">{c.platform}</span>
+                  <td className="align-left">
+                    <span style={{ fontWeight: 700, color: 'var(--text-sub)', fontSize: '0.85rem' }}>{c.platform}</span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-text-sub dark:text-text-darkSub">{c.agencyName}</span>
+                  <td className="align-left">
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>{c.agencyName}</span>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="align-center">
                     <StatusBadge status={c.status} />
                   </td>
-                  <td className="px-6 py-4 text-right text-sm text-text-sub dark:text-text-darkSub">
-                    {new Date(c.createdAt).toLocaleDateString('ja-JP')}
+                  <td className="align-right">
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-sub)' }}>
+                      {new Date(c.createdAt).toLocaleDateString('ja-JP')}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="align-right">
                     <Link to={`/cases/${c.id}`}>
-                      <Button variant="ghost" className="text-primary"><i className="fa-solid fa-eye"></i></Button>
+                      <Button variant="ghost" style={{ padding: '8px 12px' }}>
+                        <i className="fa-solid fa-chevron-right"></i>
+                      </Button>
                     </Link>
                   </td>
                 </tr>
               ))}
               {filteredCases.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-sub">案件が見つかりません</td>
+                  <td colSpan={6} style={{ padding: '80px', textAlign: 'center', color: 'var(--text-sub)' }}>
+                    <p style={{ fontWeight: 700 }}>該当する案件が見つかりませんでした。</p>
+                  </td>
                 </tr>
               )}
             </tbody>

@@ -1,138 +1,117 @@
-
 import React from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { CaseStatus } from '../types';
 import { Card, StatusBadge } from '../components/UI';
-import { STATUS_LABELS } from '../constants';
 import { Link } from 'react-router-dom';
+
+const StatCard = ({ title, value, icon, gradient }: { title: string; value: number; icon: string; gradient: string }) => (
+  <Card style={{ 
+    padding: '32px', 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '28px',
+    border: 'none',
+    background: 'var(--bg-card)',
+    position: 'relative',
+    overflow: 'hidden'
+  }}>
+    <div style={{ 
+      width: '72px', 
+      height: '72px', 
+      background: gradient, 
+      color: 'white', 
+      borderRadius: '20px', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      fontSize: '1.75rem',
+      zIndex: 2
+    }}>
+      <i className={`fa-solid ${icon}`}></i>
+    </div>
+    <div style={{ zIndex: 2 }}>
+      <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '6px', textTransform: 'uppercase' }}>{title}</div>
+      <div style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.03em' }}>{value}</div>
+    </div>
+  </Card>
+);
 
 const Dashboard = () => {
   const { user } = useAppContext();
   const cases = db.getCases(user!);
-
-  const stats = {
-    total: cases.length,
-    pending: cases.filter(c => [CaseStatus.SUBMITTED, CaseStatus.REVIEWING].includes(c.status)).length,
-    needsFix: cases.filter(c => c.status === CaseStatus.NEEDS_FIX).length,
-    approved: cases.filter(c => c.status === CaseStatus.APPROVED).length,
-  };
-
   const recentCases = [...cases].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5);
 
   return (
-    <div className="space-y-8">
-      <header className="flex justify-between items-end">
-        <div>
-          <h1 className="text-2xl font-bold text-text-main dark:text-text-darkMain">ダッシュボード</h1>
-          <p className="text-text-sub dark:text-text-darkSub">システム全体の状況を把握します</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-medium text-slate-400">{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
-        </div>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
+      <header style={{ marginBottom: '48px', textAlign: 'left' }}>
+        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, marginBottom: '10px', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+          Welcome, {user?.name.split(' ')[0]} <span style={{ color: 'var(--primary)' }}>.</span>
+        </h1>
+        <p style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: '1.1rem' }}>
+          最新の状況を確認して、スムーズな業務を。
+        </p>
       </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="総案件数" value={stats.total} icon="fa-folder" color="blue" />
-        <StatCard title="審査中 / 提出済み" value={stats.pending} icon="fa-clock" color="amber" />
-        <StatCard title="要修正" value={stats.needsFix} icon="fa-triangle-exclamation" color="red" />
-        <StatCard title="承認済み" value={stats.approved} icon="fa-circle-check" color="green" />
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+        gap: '28px', 
+        marginBottom: '48px' 
+      }}>
+        <StatCard title="総案件" value={cases.length} icon="fa-layer-group" gradient="var(--grad-primary)" />
+        <StatCard title="審査待ち" value={cases.filter(c => c.status === CaseStatus.SUBMITTED).length} icon="fa-hourglass-start" gradient="linear-gradient(135deg, #f59e0b, #fbbf24)" />
+        <StatCard title="要修正" value={cases.filter(c => c.status === CaseStatus.NEEDS_FIX).length} icon="fa-triangle-exclamation" gradient="linear-gradient(135deg, #ef4444, #f87171)" />
+        <StatCard title="承認済み" value={cases.filter(c => c.status === CaseStatus.APPROVED).length} icon="fa-check-double" gradient="linear-gradient(135deg, #10b981, #34d399)" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Activities */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-text-main dark:text-text-darkMain">最近の更新案件</h2>
-            <Link to="/cases" className="text-primary text-sm font-medium hover:underline">すべて見る</Link>
-          </div>
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800">
-                    <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">顧客名 / 代理店</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-center">ステータス</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-right">最終更新</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {recentCases.map(c => (
-                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => {/* navigate */}}>
-                      <td className="px-6 py-4">
-                        <Link to={`/cases/${c.id}`}>
-                          <p className="font-bold text-text-main dark:text-text-darkMain">{c.customerName}</p>
-                          <p className="text-xs text-text-sub dark:text-text-darkSub">{c.agencyName}</p>
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <StatusBadge status={c.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm text-text-sub dark:text-text-darkSub">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '32px', alignItems: 'start' }}>
+        <Card title="最近のアクティビティ">
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th className="align-left">案件情報</th>
+                  <th className="align-center">ステータス</th>
+                  <th className="align-right">更新日時</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentCases.map(c => (
+                  <tr key={c.id}>
+                    <td className="align-left">
+                      <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{c.customerName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{c.platform}</div>
+                    </td>
+                    <td className="align-center"><StatusBadge status={c.status} /></td>
+                    <td className="align-right">
+                      <div style={{ color: 'var(--text-main)', fontWeight: 700, fontSize: '0.85rem' }}>
                         {new Date(c.updatedAt).toLocaleDateString('ja-JP')}
-                      </td>
-                    </tr>
-                  ))}
-                  {recentCases.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="px-6 py-8 text-center text-text-sub">案件が見つかりません</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card title="アナウンスメント">
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ color: '#f59e0b' }}><i className="fa-solid fa-circle-exclamation"></i></div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>審査書類の形式が一部変更されました</div>
             </div>
-          </Card>
-        </div>
-
-        {/* Agency Summary (Quick Actions) */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-text-main dark:text-text-darkMain">クイックアクション</h2>
-          <Card className="p-6 space-y-4">
-            <QuickActionButton to="/cases/new" icon="fa-plus-circle" label="新規案件作成" sub="代理店様による案件登録" />
-            {user?.role === 'admin' && (
-              <>
-                <QuickActionButton to="/agencies" icon="fa-users" label="代理店管理" sub="承認・紹介関係の設定" />
-                <QuickActionButton to="/audit-logs" icon="fa-shield-halved" label="監査ログ閲覧" sub="操作履歴の確認" />
-              </>
-            )}
-          </Card>
-        </div>
+            <div style={{ borderBottom: '1px solid var(--border)' }}></div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ color: '#10b981' }}><i className="fa-solid fa-rocket"></i></div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>新機能：一括承認機能が追加されました</div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
 };
-
-const StatCard = ({ title, value, icon, color }: { title: string; value: number; icon: string; color: string }) => {
-  const colors: any = {
-    blue: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
-    amber: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
-    red: 'text-red-600 bg-red-50 dark:bg-red-900/20',
-    green: 'text-green-600 bg-green-50 dark:bg-green-900/20',
-  };
-  return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-text-sub dark:text-text-darkSub">{title}</span>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <i className={`fa-solid ${icon}`}></i>
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-text-main dark:text-text-darkMain">{value}</p>
-    </Card>
-  );
-};
-
-const QuickActionButton = ({ to, icon, label, sub }: { to: string; icon: string; label: string; sub: string }) => (
-  <Link to={to} className="flex items-center p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-primary dark:hover:border-primary-dark hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group">
-    <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-primary group-hover:text-white transition-all">
-      <i className={`fa-solid ${icon}`}></i>
-    </div>
-    <div className="ml-3">
-      <p className="text-sm font-bold text-text-main dark:text-text-darkMain">{label}</p>
-      <p className="text-xs text-text-sub dark:text-text-darkSub">{sub}</p>
-    </div>
-  </Link>
-);
 
 export default Dashboard;

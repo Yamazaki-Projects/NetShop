@@ -5,16 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetShop Partner Management System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script type="importmap">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --primary: #4f46e5;
+        --accent: #0ea5e9;
+        --bg-main: #f8fafc;
+        --bg-card: #ffffff;
+        --bg-sidebar: #0f172a;
+        --bg-input: #ffffff;
+        --border: #e2e8f0;
+        --text-main: #0f172a;
+        --text-sub: #64748b;
+        --white: #ffffff;
+        
+        --grad-primary: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+        --shadow-md: 0 10px 25px -5px rgba(0,0,0,0.05);
+        --radius: 16px;
+        --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-main: #020617;
+          --bg-card: #0f172a;
+          --bg-sidebar: #020617;
+          --bg-input: #1e293b;
+          --border: #1e293b;
+          --text-main: #f8fafc;
+          --text-sub: #94a3b8;
+        }
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--bg-main);
+        color: var(--text-main);
+        text-align: left; /* 基本は左揃え */
+        -webkit-font-smoothing: antialiased;
+        transition: background-color 0.4s ease, color 0.4s ease;
+      }
+
+      * { box-sizing: border-box; }
+
+      /* Button Refinement - Explicit Centering */
+      .btn {
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.875rem;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center; /* 確実に中央揃え */
+        gap: 10px;
+        transition: var(--transition);
+        text-decoration: none;
+        text-align: center;
+      }
+      .btn-primary { background: var(--grad-primary); color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+      .btn-primary:hover { transform: translateY(-1px); opacity: 0.95; }
+      
+      .btn-ghost { background: transparent; color: var(--text-sub); }
+      .btn-ghost:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+
+      /* Input Refinement */
+      .input-field {
+        width: 100%;
+        padding: 14px 18px;
+        border-radius: 12px;
+        border: 1.5px solid var(--border);
+        background-color: var(--bg-input);
+        color: var(--text-main) !important;
+        transition: var(--transition);
+        font-size: 1rem;
+        font-family: inherit;
+        text-align: left; /* 入力文字は左揃え */
+      }
+
+      /* Layout Helpers */
+      .align-left { text-align: left !important; }
+      .align-center { text-align: center !important; }
+      .align-right { text-align: right !important; }
+
+      table { width: 100%; border-collapse: collapse; }
+      th { 
+        padding: 16px 24px; 
+        font-size: 0.75rem; 
+        text-transform: uppercase; 
+        color: var(--text-sub); 
+        border-bottom: 1px solid var(--border);
+        font-weight: 800;
+        letter-spacing: 0.05em;
+      }
+      td { padding: 20px 24px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    </style>
+<script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.0.0",
-    "react/": "https://esm.sh/react@^19.0.0/",
-    "react-dom": "https://esm.sh/react-dom@^19.0.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.0.0/",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.1.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "tailwindcss": "https://esm.sh/tailwindcss@^4.1.18"
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>

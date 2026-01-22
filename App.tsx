@@ -1,15 +1,16 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { HashRouter, Routes, Route, Navigate, Link, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, UserRole, CaseStatus } from './types';
+import { HashRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
+import { User, UserRole } from './types';
 import { db } from './services/dbService';
-import { Card, Button, Input, StatusBadge } from './components/UI';
+import { Button } from './components/UI';
+import Dashboard from './pages_spa/Dashboard';
+import CaseListPage from './pages_spa/CaseListPage';
+import LoginPage from './pages_spa/LoginPage';
 
-// Context
 interface AppContextType {
   user: User | null;
   setUser: (user: User | null) => void;
   isDarkMode: boolean;
-  toggleTheme: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -19,164 +20,140 @@ export const useAppContext = () => {
   return context;
 };
 
-// --- Components ---
-
-const SidebarLink = ({ to, icon, label, isOpen, active }: { to: string; icon: string; label: string; isOpen: boolean; active: boolean }) => (
-  <Link to={to} className={`flex items-center p-3 rounded-lg transition-colors ${active ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100'}`}>
-    <i className={`fa-solid ${icon} w-6 text-center text-lg`}></i>
-    {isOpen && <span className="ml-3 font-medium">{label}</span>}
+const SidebarLink = ({ to, icon, label, active }: { to: string; icon: string; label: string; active: boolean }) => (
+  <Link to={to} style={{
+    display: 'flex',
+    alignItems: 'center',
+    padding: '14px 18px',
+    borderRadius: '12px',
+    textDecoration: 'none',
+    marginBottom: '8px',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: active ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+    color: active ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+    fontWeight: active ? '700' : '500',
+    boxShadow: active ? '0 4px 12px rgba(0,0,0,0.2)' : 'none'
+  }}>
+    <i className={`fa-solid ${icon}`} style={{ width: '24px', textAlign: 'center', marginRight: '14px', fontSize: '1.2rem', color: active ? 'var(--accent)' : 'inherit' }}></i>
+    <span>{label}</span>
   </Link>
 );
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-  const { user, setUser, isDarkMode, toggleTheme } = useAppContext();
+  const { user, setUser } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   if (!user) return null;
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row ${isDarkMode ? 'dark' : ''}`}>
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-40 h-screen sticky top-0`}>
-        <div className="p-4 flex items-center justify-between border-b border-slate-200">
-          <div className={`font-bold text-blue-600 truncate ${!isSidebarOpen && 'hidden'}`}>
-            <i className="fa-solid fa-shop mr-2"></i>Partner Portal
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <aside className="sidebar">
+        <div style={{ padding: '32px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ 
+              width: '42px', 
+              height: '42px', 
+              background: 'var(--grad-primary)', 
+              borderRadius: '12px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              color: 'white',
+              boxShadow: '0 8px 16px rgba(79, 70, 229, 0.4)'
+            }}>
+              <i className="fa-solid fa-bolt" style={{ fontSize: '1.2rem' }}></i>
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'white' }}>Partner<span style={{color: 'var(--accent)'}}>.</span></div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em' }}>Management System</div>
+            </div>
           </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-500 hover:text-blue-600 transition-colors">
-            <i className={`fa-solid ${isSidebarOpen ? 'fa-chevron-left' : 'fa-bars'}`}></i>
-          </button>
         </div>
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          <SidebarLink to="/" icon="fa-chart-pie" label="ダッシュボード" isOpen={isSidebarOpen} active={location.pathname === '/'} />
-          <SidebarLink to="/cases" icon="fa-folder-open" label="案件管理" isOpen={isSidebarOpen} active={location.pathname.startsWith('/cases')} />
-          {user?.role === UserRole.ADMIN && (
+        
+        <nav style={{ flex: 1, padding: '0 16px' }}>
+          <SidebarLink to="/" icon="fa-house" label="ダッシュボード" active={location.pathname === '/'} />
+          <SidebarLink to="/cases" icon="fa-briefcase" label="案件管理" active={location.pathname.startsWith('/cases')} />
+          {user.role === UserRole.ADMIN && (
             <>
-              <SidebarLink to="/invites" icon="fa-user-plus" label="招待管理" isOpen={isSidebarOpen} active={location.pathname === '/invites'} />
-              <SidebarLink to="/agencies" icon="fa-users" label="代理店管理" isOpen={isSidebarOpen} active={location.pathname === '/agencies'} />
-              <SidebarLink to="/audit-logs" icon="fa-list-check" label="監査ログ" isOpen={isSidebarOpen} active={location.pathname === '/audit-logs'} />
+              <div style={{ margin: '32px 20px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Administrator</div>
+              <SidebarLink to="/invites" icon="fa-ticket" label="招待管理" active={location.pathname === '/invites'} />
+              <SidebarLink to="/agencies" icon="fa-building" label="代理店管理" active={location.pathname === '/agencies'} />
+              <SidebarLink to="/audit-logs" icon="fa-shield-halved" label="監査ログ" active={location.pathname === '/audit-logs'} />
             </>
           )}
         </nav>
-        <div className="p-4 border-t border-slate-200 space-y-4">
-          <button onClick={toggleTheme} className="flex items-center w-full p-2 text-slate-500 hover:text-blue-600 transition-colors">
-            <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} w-6 text-center`}></i>
-            {isSidebarOpen && <span className="ml-3">{isDarkMode ? 'ライト' : 'ダーク'}</span>}
-          </button>
-          <button onClick={() => { setUser(null); navigate('/login'); }} className="flex items-center w-full p-2 text-red-500 hover:bg-red-50 rounded transition-colors">
-            <i className="fa-solid fa-right-from-bracket w-6 text-center"></i>
-            {isSidebarOpen && <span className="ml-3">ログアウト</span>}
+
+        <div style={{ padding: '24px', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '12px', 
+              background: 'linear-gradient(45deg, #1e293b, #334155)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              border: '1px solid rgba(255,255,255,0.1)' 
+            }}>
+              <i className="fa-solid fa-user" style={{ color: 'var(--accent)' }}></i>
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.name}</div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? 'システム管理者' : '公認代理店'}</div>
+            </div>
+          </div>
+          <button 
+            onClick={() => { setUser(null); navigate('/login'); }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              borderRadius: '10px', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              background: 'transparent', 
+              color: 'rgba(255,255,255,0.6)', 
+              fontSize: '0.8rem', 
+              fontWeight: 700, 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
+          >
+            <i className="fa-solid fa-arrow-right-from-bracket"></i> ログアウト
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">{children}</main>
-    </div>
-  );
-};
-
-// --- Pages (Inline implementation for stability) ---
-
-const LoginPage = () => {
-  const { setUser } = useAppContext();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('api18958@gmail.com');
-  const [password, setPassword] = useState('aaaa1111');
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const u = db.login(email, password);
-    if (u) {
-      setUser(u);
-      navigate('/');
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-      <Card className="p-8 w-full max-w-md space-y-6">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white mb-4"><i className="fa-solid fa-shop"></i></div>
-          <h1 className="text-2xl font-bold">Partner Portal Login</h1>
+      
+      <main style={{ flex: 1, padding: '48px', overflowY: 'auto' }}>
+        <div className="animate-fade-in">
+          {children}
         </div>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <Input label="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} />
-          <Input label="パスワード" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          <Button type="submit" className="w-full">ログイン</Button>
-        </form>
-      </Card>
+      </main>
     </div>
   );
 };
-
-const Dashboard = () => {
-  const { user } = useAppContext();
-  const cases = db.getCases(user!);
-  const recentCases = [...cases].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5);
-
-  return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">ダッシュボード</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200">
-          <p className="text-sm text-slate-400 font-bold uppercase">総案件数</p>
-          <p className="text-2xl font-bold">{cases.length}</p>
-        </div>
-      </div>
-      <Card>
-        <div className="p-4 border-b border-slate-200 flex justify-between items-center"><h2 className="font-bold">最近の案件</h2><Link to="/cases" className="text-sm text-blue-600">すべて見る</Link></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead><tr className="border-b border-slate-200"><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">顧客名</th><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-center">状態</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {recentCases.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-bold">{c.customerName}</td>
-                  <td className="px-6 py-4 text-center"><StatusBadge status={c.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const CaseListPage = () => {
-  const { user } = useAppContext();
-  const cases = db.getCases(user!);
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center"><h1 className="text-2xl font-bold">案件一覧</h1>{user?.role === UserRole.AGENCY && <Link to="/cases/new"><Button>新規登録</Button></Link>}</div>
-      <Card>
-        <table className="w-full text-left">
-          <thead><tr className="border-b border-slate-200"><th className="px-6 py-4 text-slate-400 text-xs font-bold uppercase">案件情報</th><th className="px-6 py-4 text-center text-slate-400 text-xs font-bold uppercase">ステータス</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">
-            {cases.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 font-bold">{c.customerName}</td>
-                <td className="px-6 py-4 text-center"><StatusBadge status={c.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-};
-
-// --- App Root ---
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  
+  const [isDarkMode, setIsDarkMode] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches);
+
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDarkMode);
-  }, [isDarkMode]);
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsDarkMode(e.matches);
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   return (
-    <AppContext.Provider value={{ user, setUser, isDarkMode, toggleTheme: () => setIsDarkMode(!isDarkMode) }}>
+    <AppContext.Provider value={{ user, setUser, isDarkMode }}>
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

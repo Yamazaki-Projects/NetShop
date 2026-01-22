@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
@@ -6,67 +5,88 @@ import { db } from '../services/dbService';
 import { Card, Button, Input } from '../components/UI';
 
 const LoginPage = () => {
-  const { setUser, isDarkMode } = useAppContext();
+  const { setUser } = useAppContext();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('api18958@gmail.com');
+  const [password, setPassword] = useState('aaaa1111');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     const user = db.login(email, password);
     if (user) {
       setUser(user);
       navigate('/');
     } else {
-      setError('メールアドレスまたはパスワードが正しくありません。');
+      setError('認証に失敗しました。情報を確認してください。');
     }
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 ${isDarkMode ? 'dark bg-bg-darkMain' : 'bg-bg-sub'}`}>
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white text-3xl mb-4 shadow-lg shadow-primary/20">
-            <i className="fa-solid fa-shop"></i>
+    <div style={{ 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      background: 'var(--bg-main)',
+      transition: 'background-color 0.4s ease'
+    }}>
+      <div style={{ width: '100%', maxWidth: '420px', padding: '24px' }} className="animate-fade-in">
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            width: '72px', 
+            height: '72px', 
+            background: 'var(--grad-primary)', 
+            color: 'white', 
+            borderRadius: '20px', 
+            fontSize: '1.75rem', 
+            marginBottom: '20px', 
+            boxShadow: '0 12px 20px -5px rgba(79, 70, 229, 0.4)' 
+          }}>
+            <i className="fa-solid fa-bolt"></i>
           </div>
-          <h1 className="text-2xl font-bold text-text-main dark:text-text-darkMain">NetShop Partner Portal</h1>
-          <p className="text-text-sub dark:text-text-darkSub mt-2">管理システムへログイン</p>
+          <h1 style={{ margin: '0', fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>Partner Portal</h1>
+          <p style={{ color: 'var(--text-sub)', marginTop: '10px', fontWeight: 600 }}>プロフェッショナルのための管理システム</p>
         </div>
 
-        <Card className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <Input 
-              label="メールアドレス" 
-              type="email" 
-              placeholder="example@gmail.com" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input 
-              label="パスワード" 
-              type="password" 
-              placeholder="••••••••" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+        <Card style={{ padding: '40px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+            <Input label="メールアドレス" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="api18958@gmail.com" />
+            <Input label="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
             
-            {error && <p className="text-sm text-red-500">{error}</p>}
-
-            <Button type="submit" className="w-full py-3">ログイン</Button>
+            {error && (
+              <div style={{ 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                color: '#ef4444', 
+                padding: '12px', 
+                borderRadius: '10px', 
+                fontSize: '0.85rem', 
+                fontWeight: 700, 
+                marginBottom: '24px',
+                textAlign: 'center'
+              }}>
+                <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '8px' }}></i>
+                {error}
+              </div>
+            )}
+            
+            <Button type="submit" style={{ 
+              width: '100%', 
+              padding: '16px', 
+              fontSize: '1.05rem', 
+              letterSpacing: '0.05em' 
+            }}>
+              ログイン <i className="fa-solid fa-arrow-right" style={{ marginLeft: '4px', fontSize: '0.9rem' }}></i>
+            </Button>
           </form>
-
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">デモ用情報</h3>
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg text-xs space-y-1">
-              <p className="text-text-sub"><span className="font-bold">管理者:</span> api18958@gmail.com / aaaa1111</p>
-              <p className="text-text-sub"><span className="font-bold">代理店:</span> a@example.com (パスワード不要)</p>
-            </div>
-          </div>
         </Card>
+        
+        <div style={{ textAlign: 'center', marginTop: '32px', color: 'var(--text-sub)', fontSize: '0.85rem', fontWeight: 600 }}>
+          &copy; 2024 NetShop Co., Ltd.
+        </div>
       </div>
     </div>
   );
