@@ -1,6 +1,4 @@
 
-'use client';
-
 import React from 'react';
 import { CaseStatus } from '../types';
 import { STATUS_COLORS, STATUS_LABELS } from '../constants';
