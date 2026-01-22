@@ -22,7 +22,7 @@ export const useAppContext = () => {
 // --- Components ---
 
 const SidebarLink = ({ to, icon, label, isOpen, active }: { to: string; icon: string; label: string; isOpen: boolean; active: boolean }) => (
-  <Link to={to} className={`flex items-center p-3 rounded-lg transition-colors ${active ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-dark' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+  <Link to={to} className={`flex items-center p-3 rounded-lg transition-colors ${active ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100'}`}>
     <i className={`fa-solid ${icon} w-6 text-center text-lg`}></i>
     {isOpen && <span className="ml-3 font-medium">{label}</span>}
   </Link>
@@ -37,13 +37,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   if (!user) return null;
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row ${isDarkMode ? 'dark bg-bg-darkMain' : 'bg-slate-50'}`}>
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-bg-darkSub border-r border-slate-200 dark:border-slate-800 transition-all duration-300 flex flex-col z-40 h-screen sticky top-0`}>
-        <div className="p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-          <div className={`font-bold text-primary dark:text-primary-dark truncate ${!isSidebarOpen && 'hidden'}`}>
-            <i className="fa-solid fa-shop mr-2"></i>NetShop System
+    <div className={`min-h-screen flex flex-col md:flex-row ${isDarkMode ? 'dark' : ''}`}>
+      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-40 h-screen sticky top-0`}>
+        <div className="p-4 flex items-center justify-between border-b border-slate-200">
+          <div className={`font-bold text-blue-600 truncate ${!isSidebarOpen && 'hidden'}`}>
+            <i className="fa-solid fa-shop mr-2"></i>Partner Portal
           </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-500 hover:text-primary transition-colors">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-500 hover:text-blue-600 transition-colors">
             <i className={`fa-solid ${isSidebarOpen ? 'fa-chevron-left' : 'fa-bars'}`}></i>
           </button>
         </div>
@@ -58,23 +58,23 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </>
           )}
         </nav>
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
-          <button onClick={toggleTheme} className="flex items-center w-full p-2 text-slate-500 hover:text-primary transition-colors">
+        <div className="p-4 border-t border-slate-200 space-y-4">
+          <button onClick={toggleTheme} className="flex items-center w-full p-2 text-slate-500 hover:text-blue-600 transition-colors">
             <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} w-6 text-center`}></i>
             {isSidebarOpen && <span className="ml-3">{isDarkMode ? 'ライト' : 'ダーク'}</span>}
           </button>
-          <button onClick={() => { setUser(null); navigate('/login'); }} className="flex items-center w-full p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors">
+          <button onClick={() => { setUser(null); navigate('/login'); }} className="flex items-center w-full p-2 text-red-500 hover:bg-red-50 rounded transition-colors">
             <i className="fa-solid fa-right-from-bracket w-6 text-center"></i>
             {isSidebarOpen && <span className="ml-3">ログアウト</span>}
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">{children}</main>
     </div>
   );
 };
 
-// --- Pages ---
+// --- Pages (Inline implementation for stability) ---
 
 const LoginPage = () => {
   const { setUser } = useAppContext();
@@ -95,8 +95,8 @@ const LoginPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
       <Card className="p-8 w-full max-w-md space-y-6">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-white mb-4"><i className="fa-solid fa-shop"></i></div>
-          <h1 className="text-2xl font-bold">Partner Portal</h1>
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white mb-4"><i className="fa-solid fa-shop"></i></div>
+          <h1 className="text-2xl font-bold">Partner Portal Login</h1>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           <Input label="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} />
@@ -114,23 +114,23 @@ const Dashboard = () => {
   const recentCases = [...cases].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <h1 className="text-2xl font-bold dark:text-white">ダッシュボード</h1>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold">ダッシュボード</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-bg-darkSub p-6 rounded-xl border dark:border-slate-800">
-          <p className="text-sm text-slate-400">総案件数</p>
-          <p className="text-2xl font-bold dark:text-white">{cases.length}</p>
+        <div className="bg-white p-6 rounded-xl border border-slate-200">
+          <p className="text-sm text-slate-400 font-bold uppercase">総案件数</p>
+          <p className="text-2xl font-bold">{cases.length}</p>
         </div>
       </div>
       <Card>
-        <div className="p-4 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="font-bold dark:text-white">最近の案件</h2></div>
+        <div className="p-4 border-b border-slate-200 flex justify-between items-center"><h2 className="font-bold">最近の案件</h2><Link to="/cases" className="text-sm text-blue-600">すべて見る</Link></div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead><tr className="border-b dark:border-slate-800"><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">顧客</th><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-center">状態</th></tr></thead>
-            <tbody className="divide-y dark:divide-slate-800">
+            <thead><tr className="border-b border-slate-200"><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase">顧客名</th><th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase text-center">状態</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
               {recentCases.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                  <td className="px-6 py-4 font-bold dark:text-white">{c.customerName}</td>
+                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-bold">{c.customerName}</td>
                   <td className="px-6 py-4 text-center"><StatusBadge status={c.status} /></td>
                 </tr>
               ))}
@@ -147,14 +147,14 @@ const CaseListPage = () => {
   const cases = db.getCases(user!);
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold dark:text-white">案件一覧</h1>
+      <div className="flex justify-between items-center"><h1 className="text-2xl font-bold">案件一覧</h1>{user?.role === UserRole.AGENCY && <Link to="/cases/new"><Button>新規登録</Button></Link>}</div>
       <Card>
         <table className="w-full text-left">
-          <thead><tr className="border-b dark:border-slate-800"><th className="px-6 py-4 text-slate-400">案件名</th><th className="px-6 py-4 text-center text-slate-400">状態</th></tr></thead>
-          <tbody className="divide-y dark:divide-slate-800">
+          <thead><tr className="border-b border-slate-200"><th className="px-6 py-4 text-slate-400 text-xs font-bold uppercase">案件情報</th><th className="px-6 py-4 text-center text-slate-400 text-xs font-bold uppercase">ステータス</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">
             {cases.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                <td className="px-6 py-4 font-bold dark:text-white">{c.customerName}</td>
+              <tr key={c.id} className="hover:bg-slate-50">
+                <td className="px-6 py-4 font-bold">{c.customerName}</td>
                 <td className="px-6 py-4 text-center"><StatusBadge status={c.status} /></td>
               </tr>
             ))}
