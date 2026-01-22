@@ -49,6 +49,7 @@ const ProtectedRoute = ({ children, roles }: { children?: React.ReactNode; roles
 const Layout = () => {
   const { user, setUser, isDarkMode, toggleTheme } = useAppContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const handleLogout = () => {
@@ -57,12 +58,12 @@ const Layout = () => {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`min-h-screen flex flex-col md:flex-row ${isDarkMode ? 'dark bg-bg-darkMain' : 'bg-white'}`}>
       {/* Sidebar */}
       <aside className={`
         ${isSidebarOpen ? 'w-64' : 'w-20'} 
         bg-bg-sub dark:bg-bg-darkSub border-r border-slate-200 dark:border-slate-800 
-        transition-all duration-300 flex flex-col z-40
+        transition-all duration-300 flex flex-col z-40 h-screen sticky top-0
       `}>
         <div className="p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
           <div className={`font-bold text-primary dark:text-primary-dark truncate ${!isSidebarOpen && 'hidden'}`}>
@@ -74,16 +75,16 @@ const Layout = () => {
         </div>
 
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          <SidebarLink to="/" icon="fa-chart-pie" label="ダッシュボード" isOpen={isSidebarOpen} />
-          <SidebarLink to="/cases" icon="fa-folder-open" label="案件管理" isOpen={isSidebarOpen} />
+          <SidebarLink to="/" icon="fa-chart-pie" label="ダッシュボード" isOpen={isSidebarOpen} active={location.pathname === '/'} />
+          <SidebarLink to="/cases" icon="fa-folder-open" label="案件管理" isOpen={isSidebarOpen} active={location.pathname.startsWith('/cases') && location.pathname !== '/cases/new'} />
           {user?.role === UserRole.AGENCY && (
-            <SidebarLink to="/cases/new" icon="fa-plus-circle" label="新規案件作成" isOpen={isSidebarOpen} />
+            <SidebarLink to="/cases/new" icon="fa-plus-circle" label="新規案件作成" isOpen={isSidebarOpen} active={location.pathname === '/cases/new'} />
           )}
           {user?.role === UserRole.ADMIN && (
             <>
-              <SidebarLink to="/invites" icon="fa-user-plus" label="招待管理" isOpen={isSidebarOpen} />
-              <SidebarLink to="/agencies" icon="fa-users" label="代理店管理" isOpen={isSidebarOpen} />
-              <SidebarLink to="/audit-logs" icon="fa-list-check" label="監査ログ" isOpen={isSidebarOpen} />
+              <SidebarLink to="/invites" icon="fa-user-plus" label="招待管理" isOpen={isSidebarOpen} active={location.pathname === '/invites'} />
+              <SidebarLink to="/agencies" icon="fa-users" label="代理店管理" isOpen={isSidebarOpen} active={location.pathname === '/agencies'} />
+              <SidebarLink to="/audit-logs" icon="fa-list-check" label="監査ログ" isOpen={isSidebarOpen} active={location.pathname === '/audit-logs'} />
             </>
           )}
         </nav>
@@ -104,7 +105,7 @@ const Layout = () => {
               </div>
             )}
           </div>
-          <button onClick={handleLogout} className="flex items-center w-full p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors">
+          <button onClick={handleLogout} className="flex items-center w-full p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors text-left">
             <i className="fa-solid fa-right-from-bracket w-6 text-center"></i>
             {isSidebarOpen && <span className="ml-3">ログアウト</span>}
           </button>
@@ -112,7 +113,7 @@ const Layout = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 bg-white dark:bg-bg-darkMain overflow-y-auto h-screen p-4 md:p-8">
+      <main className="flex-1 bg-white dark:bg-bg-darkMain overflow-y-auto p-4 md:p-8">
         <Routes>
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute>} />
@@ -128,14 +129,11 @@ const Layout = () => {
   );
 };
 
-const SidebarLink = ({ to, icon, label, isOpen }: { to: string; icon: string; label: string; isOpen: boolean }) => {
-  const location = useLocation();
-  const isActive = location.pathname === to;
-
+function SidebarLink({ to, icon, label, isOpen, active }: { to: string; icon: string; label: string; isOpen: boolean; active: boolean }) {
   return (
     <Link to={to} className={`
       flex items-center p-3 rounded-lg transition-colors
-      ${isActive 
+      ${active 
         ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-dark' 
         : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'}
     `}>
@@ -143,13 +141,21 @@ const SidebarLink = ({ to, icon, label, isOpen }: { to: string; icon: string; la
       {isOpen && <span className="ml-3 font-medium">{label}</span>}
     </Link>
   );
-};
+}
 
 const AppProvider = ({ children }: { children?: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
