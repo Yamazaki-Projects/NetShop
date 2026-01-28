@@ -23,6 +23,15 @@ export enum PlatformType {
   OTHERS = 'Others',
 }
 
+export enum MallOpeningStatus {
+  NOT_STARTED = '未着手',
+  APPLYING = '申請中',
+  SCREENING = '審査中',
+  PREPARING = '開店準備',
+  OPEN = '開店済',
+  SUSPENDED = '休止中',
+}
+
 export enum TaskStatus {
   TODO = 'todo',
   DOING = 'doing',
@@ -75,6 +84,36 @@ export interface CaseReview {
   createdAt: string;
 }
 
+export interface SublineInfo {
+  number050?: string;
+  loginId?: string;
+  password?: string;
+  status: 'active' | 'pending' | 'none';
+}
+
+export interface EmailJpInfo {
+  email?: string;
+  password?: string;
+  status: 'active' | 'pending' | 'none';
+}
+
+export interface RakutenInfo {
+  applyId?: string;
+  applyPass?: string;
+  rLoginId?: string;
+  rLoginPass?: string;
+  personalId?: string;
+  personalPass?: string;
+  billpayId?: string;
+  billpayPass?: string;
+}
+
+export interface MallProgress {
+  rakuten: MallOpeningStatus;
+  yahoo: MallOpeningStatus;
+  aupay: MallOpeningStatus;
+}
+
 export interface Case {
   id: string;
   agencyId: string;
@@ -93,6 +132,10 @@ export interface Case {
   tasks: CaseTask[];
   documents: CaseDocument[];
   reviews: CaseReview[];
+  subline: SublineInfo;
+  emailJp: EmailJpInfo;
+  rakutenInfo: RakutenInfo;
+  mallProgress: MallProgress;
 }
 
 export interface AuditLog {

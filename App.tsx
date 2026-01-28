@@ -5,6 +5,7 @@ import { db } from './services/dbService';
 import { Button } from './components/UI';
 import Dashboard from './pages_spa/Dashboard';
 import CaseListPage from './pages_spa/CaseListPage';
+import CaseDetailPage from './pages_spa/CaseDetailPage';
 import LoginPage from './pages_spa/LoginPage';
 
 interface AppContextType {
@@ -143,7 +144,6 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
-    // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
       setIsDarkMode(e.matches);
@@ -159,6 +159,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />} />
           <Route path="/cases" element={user ? <Layout><CaseListPage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/cases/:id" element={user ? <Layout><CaseDetailPage /></Layout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

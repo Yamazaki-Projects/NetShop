@@ -1,6 +1,6 @@
 
 import { 
-  User, Agency, Case, AgencyReferral, CaseStatus, AuditLog, UserRole, CaseDocument 
+  User, Agency, Case, AgencyReferral, CaseStatus, AuditLog, UserRole, CaseDocument, TaskStatus, MallOpeningStatus
 } from '../types';
 import { mockUsers, mockAgencies, mockCases, mockReferrals, mockAuditLogs } from './mockData';
 
@@ -31,14 +31,7 @@ class DBService {
   private invites: InviteInfo[] = [];
 
   login(email: string, pass: string): User | undefined {
-    if (email === 'api18958@gmail.com' && pass === 'aaaa1111') {
-      return this.users.find(u => u.email === email);
-    }
     return this.users.find(u => u.email === email);
-  }
-
-  getCurrentUser(id: string): User | undefined {
-    return this.users.find(u => u.id === id);
   }
 
   getCases(user: User): Case[] {
@@ -61,11 +54,18 @@ class DBService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       tasks: [
-        { id: 't1', title: '本人確認書類の提出', status: 'todo' as any },
-        { id: 't2', title: '口座情報の登録', status: 'todo' as any },
+        { id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO },
+        { id: 't2', title: '口座情報の登録', status: TaskStatus.TODO },
+        { id: 't3', title: 'ショップ開設審査', status: TaskStatus.TODO },
       ],
       documents: [],
-      reviews: []
+      reviews: [],
+      rakutenInfo: {},
+      mallProgress: {
+        rakuten: MallOpeningStatus.NOT_STARTED,
+        yahoo: MallOpeningStatus.NOT_STARTED,
+        aupay: MallOpeningStatus.NOT_STARTED
+      }
     };
     this.cases.unshift(caseObj);
     this.logAction(actor, '案件作成', 'case', caseObj.id, { status: caseObj.status });
@@ -76,8 +76,21 @@ class DBService {
     const index = this.cases.findIndex(c => c.id === id);
     if (index !== -1) {
       this.cases[index] = { ...this.cases[index], ...updates, updatedAt: new Date().toISOString() };
-      this.logAction(actor, '案件更新', 'case', id, updates);
+      this.logAction(actor, '案件情報更新', 'case', id, updates);
       return this.cases[index];
+    }
+  }
+
+  updateTaskStatus(caseId: string, taskId: string, status: TaskStatus, actor: User) {
+    const targetCase = this.cases.find(c => c.id === caseId);
+    if (targetCase) {
+      const task = targetCase.tasks.find(t => t.id === taskId);
+      if (task) {
+        task.status = status;
+        targetCase.updatedAt = new Date().toISOString();
+        this.logAction(actor, `タスク更新: ${task.title}`, 'case', caseId, { status });
+        return targetCase;
+      }
     }
   }
 
@@ -86,100 +99,15 @@ class DBService {
     if (targetCase) {
       const newDoc = { ...doc, id: `D-${Date.now()}`, createdAt: new Date().toISOString() };
       targetCase.documents.push(newDoc);
-      this.logAction(actor, '書類アップロード', 'case', caseId, { docType: doc.docType });
+      targetCase.updatedAt = new Date().toISOString();
+      this.logAction(actor, '書類追加', 'case', caseId, { docType: doc.docType });
       return targetCase;
     }
   }
 
-  reviewCase(caseId: string, action: CaseStatus, reasonTemplate: string, reasonNote: string, actor: User) {
-    const targetCase = this.cases.find(c => c.id === caseId);
-    if (!targetCase) return;
-    const review = { id: `r${Date.now()}`, action, reasonTemplate, reasonNote, createdByAdminName: actor.name, createdAt: new Date().toISOString() };
-    targetCase.status = action;
-    targetCase.reviews.unshift(review);
-    this.logAction(actor, `審査完了: ${action}`, 'case', caseId, { action });
-    return targetCase;
-  }
-
-  getAgencies() { return this.agencies; }
-
-  updateAgencyStatus(agencyId: string, status: 'active' | 'suspended', actor: User) {
-    const agency = this.agencies.find(a => a.id === agencyId);
-    if (agency) {
-      agency.status = status;
-      this.logAction(actor, '代理店ステータス変更', 'agency', agencyId, { status });
-    }
-  }
-
-  updateReferral(childId: string, parentId: string, actor: User) {
-    const existingIndex = this.referrals.findIndex(r => r.childAgencyId === childId);
-    if (existingIndex !== -1) {
-      this.referrals[existingIndex].parentAgencyId = parentId;
-    } else {
-      this.referrals.push({ childAgencyId: childId, parentAgencyId: parentId, createdAt: new Date().toISOString() });
-    }
-    this.logAction(actor, '紹介関係変更', 'referral', childId, { newParent: parentId });
-  }
-
-  getAuditLogs() { return [...this.auditLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); }
-
-  generateInvite(type: UserRole, actor: User): string {
-    const code = Math.random().toString(36).substr(2, 10).toUpperCase();
-    const invite: InviteInfo = {
-      code,
-      type,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      createdBy: actor.id
-    };
-    this.invites.push(invite);
-    this.logAction(actor, `招待URL発行 (${type})`, 'user', code, { type });
-    return code;
-  }
-
-  validateInvite(code: string): InviteInfo | undefined {
-    const invite = this.invites.find(i => i.code === code);
-    if (invite && new Date(invite.expiresAt) > new Date()) return invite;
-    return undefined;
-  }
-
-  registerUser(code: string, name: string, email: string): User | undefined {
-    const invite = this.validateInvite(code);
-    if (!invite) return undefined;
-
-    const newUser: User = {
-      id: `u${this.users.length + 1}`,
-      name,
-      email,
-      role: invite.type
-    };
-
-    if (invite.type === UserRole.AGENCY) {
-      const newAgency: Agency = {
-        id: `ag${this.agencies.length + 1}`,
-        name: `${name}代理店`,
-        status: 'active',
-        createdAt: new Date().toISOString()
-      };
-      this.agencies.push(newAgency);
-      newUser.agencyId = newAgency.id;
-      
-      this.referrals.push({
-        parentAgencyId: 'ag1',
-        childAgencyId: newAgency.id,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    this.users.push(newUser);
-    this.invites = this.invites.filter(i => i.code !== code);
-    
-    this.logAction(newUser, '新規登録完了', 'user', newUser.id, { role: newUser.role });
-    return newUser;
-  }
-
   private logAction(actor: User, action: string, targetType: AuditLog['targetType'], targetId: string, metadata: any) {
     const log: AuditLog = {
-      id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: `LOG-${Date.now()}`,
       actorUserId: actor.id,
       actorName: actor.name,
       action,
@@ -191,7 +119,8 @@ class DBService {
     this.auditLogs.push(log);
   }
 
-  getReferralTree() { return this.referrals; }
+  getAuditLogs() { return [...this.auditLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); }
+  getAgencies() { return this.agencies; }
 }
 
 export const db = new DBService();

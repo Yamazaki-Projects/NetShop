@@ -1,5 +1,5 @@
 
-import { User, UserRole, Agency, AgencyReferral, Case, CaseStatus, PlatformType, TaskStatus, AuditLog } from '../types';
+import { User, UserRole, Agency, AgencyReferral, Case, CaseStatus, PlatformType, TaskStatus, AuditLog, MallOpeningStatus } from '../types';
 
 export const mockUsers: User[] = [
   { id: 'u1', name: 'システム管理者', email: 'api18958@gmail.com', role: UserRole.ADMIN },
@@ -40,7 +40,33 @@ export const mockCases: Case[] = [
     updatedAt: '2023-05-10T15:00:00Z',
     tasks: [{ id: 't1', title: '審査書類送付', status: TaskStatus.DONE }],
     documents: [{ id: 'd1', docType: '本人確認', fileName: 'id.pdf', createdAt: '2023-05-01T10:05:00Z' }],
-    reviews: []
+    reviews: [],
+    subline: {
+      number050: '050-1234-5678',
+      loginId: 'subline_user_01',
+      password: 'password123',
+      status: 'active'
+    },
+    emailJp: {
+      email: 'shop-tanaka@e-mail.jp',
+      password: 'emailpassword',
+      status: 'active'
+    },
+    rakutenInfo: {
+      applyId: 'rakuten_apply_88',
+      applyPass: 'apply_pass_99',
+      rLoginId: 'r_login_user',
+      rLoginPass: 'r_login_pass',
+      personalId: 'personal_id_test',
+      personalPass: 'personal_pass_test',
+      billpayId: 'bill_pay_777',
+      billpayPass: 'bill_pay_pass'
+    },
+    mallProgress: {
+      rakuten: MallOpeningStatus.OPEN,
+      yahoo: MallOpeningStatus.PREPARING,
+      aupay: MallOpeningStatus.APPLYING
+    }
   }
 ];
 
