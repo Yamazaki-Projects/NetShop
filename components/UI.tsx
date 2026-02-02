@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { CaseStatus } from '../types';
 import { STATUS_LABELS } from '../constants';
@@ -37,7 +38,8 @@ export const StatusBadge = ({ status }: { status: CaseStatus }) => {
   );
 };
 
-export const Card = ({ children, className = "", title, style }: { children?: React.ReactNode, className?: string, title?: string, style?: React.CSSProperties }) => (
+// Added key to interface to avoid TS errors when Card is used within a map()
+export const Card = ({ children, className = "", title, style }: { children?: React.ReactNode, className?: string, title?: string, style?: React.CSSProperties, key?: React.Key }) => (
   <div className={`card ${className}`} style={style}>
     {title && (
       <div style={{ 

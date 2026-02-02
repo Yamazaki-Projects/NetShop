@@ -23,19 +23,18 @@
         --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
         --shadow-md: 0 10px 25px -5px rgba(0,0,0,0.05);
         --radius: 16px;
-        --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg-main: #020617;
-          --bg-card: #0f172a;
-          --bg-sidebar: #020617;
-          --bg-input: #1e293b;
-          --border: #1e293b;
-          --text-main: #f8fafc;
-          --text-sub: #94a3b8;
-        }
+      /* Dark mode class */
+      html.dark-mode {
+        --bg-main: #020617;
+        --bg-card: #0f172a;
+        --bg-sidebar: #020617;
+        --bg-input: #1e293b;
+        --border: #1e293b;
+        --text-main: #f8fafc;
+        --text-sub: #94a3b8;
       }
 
       body {
@@ -43,14 +42,13 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         background-color: var(--bg-main);
         color: var(--text-main);
-        text-align: left; /* 基本は左揃え */
+        text-align: left;
         -webkit-font-smoothing: antialiased;
         transition: background-color 0.4s ease, color 0.4s ease;
       }
 
       * { box-sizing: border-box; }
 
-      /* Button Refinement - Explicit Centering */
       .btn {
         padding: 12px 24px;
         border-radius: 12px;
@@ -60,7 +58,7 @@
         border: none;
         display: inline-flex;
         align-items: center;
-        justify-content: center; /* 確実に中央揃え */
+        justify-content: center;
         gap: 10px;
         transition: var(--transition);
         text-decoration: none;
@@ -70,9 +68,8 @@
       .btn-primary:hover { transform: translateY(-1px); opacity: 0.95; }
       
       .btn-ghost { background: transparent; color: var(--text-sub); }
-      .btn-ghost:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+      .btn-ghost:hover { background: rgba(255,255,255,0.05); color: var(--text-main); }
 
-      /* Input Refinement */
       .input-field {
         width: 100%;
         padding: 14px 18px;
@@ -83,10 +80,19 @@
         transition: var(--transition);
         font-size: 1rem;
         font-family: inherit;
-        text-align: left; /* 入力文字は左揃え */
+        text-align: left;
+        outline: none;
+      }
+      .input-field:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+      }
+      /* Ensure option text is visible */
+      .input-field option {
+        background-color: var(--bg-card);
+        color: var(--text-main);
       }
 
-      /* Layout Helpers */
       .align-left { text-align: left !important; }
       .align-center { text-align: center !important; }
       .align-right { text-align: right !important; }
@@ -108,6 +114,7 @@
         border: 1px solid var(--border);
         border-radius: var(--radius);
         overflow: hidden;
+        transition: background-color 0.4s ease, border-color 0.4s ease;
       }
 
       @keyframes fadeIn {
@@ -115,6 +122,35 @@
         to { opacity: 1; transform: translateY(0); }
       }
       .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+
+      .sidebar {
+        width: 280px;
+        background-color: var(--bg-sidebar);
+        border-right: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        flex-direction: column;
+        color: white;
+        transition: background-color 0.4s ease;
+      }
+      
+      .theme-toggle-btn {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+      .theme-toggle-btn:hover {
+        background: rgba(255,255,255,0.1);
+        border-color: rgba(255,255,255,0.2);
+      }
     </style>
 <script type="importmap">
 {

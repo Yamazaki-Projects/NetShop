@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { User, UserRole } from './types';
@@ -8,10 +9,14 @@ import CaseListPage from './pages_spa/CaseListPage';
 import CaseDetailPage from './pages_spa/CaseDetailPage';
 import LoginPage from './pages_spa/LoginPage';
 
+type ThemeMode = 'light' | 'dark' | 'system';
+
 interface AppContextType {
   user: User | null;
   setUser: (user: User | null) => void;
-  isDarkMode: boolean;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -40,12 +45,25 @@ const SidebarLink = ({ to, icon, label, active }: { to: string; icon: string; la
   </Link>
 );
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
-  const { user, setUser } = useAppContext();
+// Changed children to optional to fix TypeScript error in JSX usage (lines 226-228)
+const Layout = ({ children }: { children?: React.ReactNode }) => {
+  const { user, setUser, themeMode, toggleTheme } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
 
   if (!user) return null;
+
+  const getThemeIcon = () => {
+    if (themeMode === 'light') return 'fa-sun';
+    if (themeMode === 'dark') return 'fa-moon';
+    return 'fa-circle-half-stroke';
+  };
+
+  const getThemeLabel = () => {
+    if (themeMode === 'light') return 'ライト';
+    if (themeMode === 'dark') return 'ダーク';
+    return '自動';
+  };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -86,23 +104,35 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </nav>
 
         <div style={{ padding: '24px', background: 'rgba(0,0,0,0.2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: '12px', 
-              background: 'linear-gradient(45deg, #1e293b, #334155)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              border: '1px solid rgba(255,255,255,0.1)' 
-            }}>
-              <i className="fa-solid fa-user" style={{ color: 'var(--accent)' }}></i>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '12px', 
+                background: 'linear-gradient(45deg, #1e293b, #334155)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                border: '1px solid rgba(255,255,255,0.1)' 
+              }}>
+                <i className="fa-solid fa-user" style={{ color: 'var(--accent)' }}></i>
+              </div>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.name}</div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? '管理者' : '代理店'}</div>
+              </div>
             </div>
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.name}</div>
-              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? 'システム管理者' : '公認代理店'}</div>
-            </div>
+            
+            {/* Cycle Theme Toggle Button */}
+            <button 
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={`現在の設定: ${getThemeLabel()}`}
+            >
+              <i className={`fa-solid ${getThemeIcon()}`}></i>
+              <span>{getThemeLabel()}</span>
+            </button>
           </div>
           <button 
             onClick={() => { setUser(null); navigate('/login'); }}
@@ -141,19 +171,57 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches);
+  
+  // Theme state: 'light' | 'dark' | 'system'
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('theme-mode') as ThemeMode;
+    return saved || 'system';
+  });
+
+  const applyTheme = (mode: ThemeMode) => {
+    const html = document.documentElement;
+    let isDark = false;
+    
+    if (mode === 'system') {
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else {
+      isDark = mode === 'dark';
+    }
+
+    if (isDark) {
+      html.classList.add('dark-mode');
+      html.classList.remove('light-mode');
+    } else {
+      html.classList.remove('dark-mode');
+      html.classList.add('light-mode');
+    }
+    localStorage.setItem('theme-mode', mode);
+  };
 
   useEffect(() => {
+    applyTheme(themeMode);
+  }, [themeMode]);
+
+  // Handle system preference changes in 'system' mode
+  useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      setIsDarkMode(e.matches);
+    const handleChange = () => {
+      if (themeMode === 'system') {
+        applyTheme('system');
+      }
     };
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  }, [themeMode]);
+
+  const toggleTheme = () => {
+    const modes: ThemeMode[] = ['system', 'light', 'dark'];
+    const nextIndex = (modes.indexOf(themeMode) + 1) % modes.length;
+    setThemeMode(modes[nextIndex]);
+  };
 
   return (
-    <AppContext.Provider value={{ user, setUser, isDarkMode }}>
+    <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode, toggleTheme }}>
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
