@@ -7,6 +7,7 @@ export const mockUsers: User[] = [
   { id: 'u3', name: 'Agency B (A child)', email: 'b@example.com', role: UserRole.AGENCY, agencyId: 'ag2' },
   { id: 'u4', name: 'Agency C (B child)', email: 'c@example.com', role: UserRole.AGENCY, agencyId: 'ag3' },
   { id: 'u5', name: 'Agency D (C child)', email: 'd@example.com', role: UserRole.AGENCY, agencyId: 'ag4' },
+  { id: 'u6', name: 'テスト代理店ユーザー', email: 'api18959@gmail.com', role: UserRole.AGENCY, agencyId: 'ag5' },
 ];
 
 export const mockAgencies: Agency[] = [
@@ -14,6 +15,7 @@ export const mockAgencies: Agency[] = [
   { id: 'ag2', name: 'Agency Sub B', status: 'active', createdAt: '2023-02-01T00:00:00Z' },
   { id: 'ag3', name: 'Agency Sub C', status: 'active', createdAt: '2023-03-01T00:00:00Z' },
   { id: 'ag4', name: 'Agency Sub D', status: 'active', createdAt: '2023-04-01T00:00:00Z' },
+  { id: 'ag5', name: 'テスト代理店株式会社', status: 'active', createdAt: '2024-01-01T00:00:00Z' },
 ];
 
 export const mockReferrals: AgencyReferral[] = [
@@ -66,6 +68,37 @@ export const mockCases: Case[] = [
       rakuten: MallOpeningStatus.OPEN,
       yahoo: MallOpeningStatus.PREPARING,
       aupay: MallOpeningStatus.APPLYING
+    }
+  },
+  {
+    id: 'c2',
+    agencyId: 'ag5',
+    agencyName: 'テスト代理店株式会社',
+    status: CaseStatus.SUBMITTED,
+    platform: PlatformType.YAHOO,
+    customerType: 'corporation',
+    customerName: '佐藤 健二',
+    companyName: 'サトウ・エンジニアリング',
+    phone: '06-9876-5432',
+    email: 'sato@example.jp',
+    address: '大阪府大阪市北区2-2-2',
+    notes: '新規開拓案件です。',
+    createdAt: '2024-02-15T09:00:00Z',
+    updatedAt: '2024-02-15T09:00:00Z',
+    tasks: [
+      { id: 't1', title: '本人確認書類の提出', status: TaskStatus.DONE },
+      { id: 't2', title: '口座情報の登録', status: TaskStatus.DOING },
+      { id: 't3', title: 'ショップ開設審査', status: TaskStatus.TODO },
+    ],
+    documents: [],
+    reviews: [],
+    subline: { status: 'pending' },
+    emailJp: { status: 'pending' },
+    rakutenInfo: {},
+    mallProgress: {
+      rakuten: MallOpeningStatus.NOT_STARTED,
+      yahoo: MallOpeningStatus.APPLYING,
+      aupay: MallOpeningStatus.NOT_STARTED
     }
   }
 ];

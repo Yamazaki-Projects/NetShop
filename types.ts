@@ -120,12 +120,20 @@ export interface Case {
   agencyName: string;
   status: CaseStatus;
   platform: PlatformType;
-  customerType: 'individual' | 'corporation';
+  customerType: 'corporation' | 'sole_proprietor';
   customerName: string;
   companyName?: string;
+  corporateNumber?: string;
+  // 法人/事業所 住所
+  zipCode?: string; 
+  address?: string;
+  // 代表者情報
+  repBirthday?: string;
+  repZipCode?: string;
+  repAddress?: string;
+  
   phone: string;
   email: string;
-  address: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
