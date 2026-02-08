@@ -3,7 +3,8 @@ import React from 'react';
 import { CaseStatus } from '../types';
 import { STATUS_LABELS } from '../constants';
 
-export const Badge = ({ children, color }: { children?: React.ReactNode, color: string }) => (
+// Added optional style prop to Badge component to fix TS errors in consumers
+export const Badge = ({ children, color, style }: { children?: React.ReactNode, color: string, style?: React.CSSProperties }) => (
   <span className="badge" style={{ 
     backgroundColor: color, 
     color: '#fff', 
@@ -13,7 +14,8 @@ export const Badge = ({ children, color }: { children?: React.ReactNode, color: 
     fontWeight: 700,
     display: 'inline-flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    ...style
   }}>
     {children}
   </span>

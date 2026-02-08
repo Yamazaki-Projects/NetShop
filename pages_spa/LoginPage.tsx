@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { Card, Button, Input } from '../components/UI';
@@ -7,18 +8,34 @@ import { Card, Button, Input } from '../components/UI';
 const LoginPage = () => {
   const { setUser } = useAppContext();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('api18958@gmail.com');
+  const [loginId, setLoginId] = useState('admin');
   const [password, setPassword] = useState('aaaa1111');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const user = db.login(email, password);
+  const handleLogin = (eId: string, ePass: string) => {
+    const user = db.login(eId, ePass);
     if (user) {
       setUser(user);
       navigate('/');
     } else {
-      setError('認証に失敗しました。情報を確認してください。');
+      setError('認証に失敗しました。ログインIDまたはパスワードを確認してください。');
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleLogin(loginId, password);
+  };
+
+  const quickLogin = (type: 'admin' | 'agency') => {
+    if (type === 'admin') {
+      setLoginId('admin');
+      setPassword('aaaa1111');
+      handleLogin('admin', 'aaaa1111');
+    } else {
+      setLoginId('PA0001');
+      setPassword('demo');
+      handleLogin('PA0001', 'demo');
     }
   };
 
@@ -54,7 +71,7 @@ const LoginPage = () => {
 
         <Card style={{ padding: '40px' }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
-            <Input label="メールアドレス" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="api18958@gmail.com" />
+            <Input label="ログインID" type="text" value={loginId} onChange={(e) => setLoginId(e.target.value)} required placeholder="admin / PA0001" />
             <Input label="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
             
             {error && (
@@ -77,10 +94,41 @@ const LoginPage = () => {
               width: '100%', 
               padding: '16px', 
               fontSize: '1.05rem', 
-              letterSpacing: '0.05em' 
+              letterSpacing: '0.05em',
+              marginBottom: '24px'
             }}>
               ログイン <i className="fa-solid fa-arrow-right" style={{ marginLeft: '4px', fontSize: '0.9rem' }}></i>
             </Button>
+
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <Link to="/register" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>
+                新規代理店登録はこちら <i className="fa-solid fa-chevron-right" style={{ fontSize: '0.7rem', marginLeft: '4px' }}></i>
+              </Link>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '24px', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>デモアカウントでクイックログイン</p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button 
+                  type="button"
+                  onClick={() => quickLogin('admin')}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1.5px solid var(--border)', background: 'var(--bg-main)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', color: 'var(--text-main)', transition: 'all 0.2s' }}
+                  onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
+                  onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                >
+                  <i className="fa-solid fa-shield-halved" style={{ marginRight: '6px', color: 'var(--primary)' }}></i> admin
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => quickLogin('agency')}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1.5px solid var(--border)', background: 'var(--bg-main)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', color: 'var(--text-main)', transition: 'all 0.2s' }}
+                  onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                >
+                  <i className="fa-solid fa-briefcase" style={{ marginRight: '6px', color: 'var(--accent)' }}></i> PA0001
+                </button>
+              </div>
+            </div>
           </form>
         </Card>
         

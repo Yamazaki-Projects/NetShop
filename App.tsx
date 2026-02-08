@@ -8,6 +8,9 @@ import Dashboard from './pages_spa/Dashboard';
 import CaseListPage from './pages_spa/CaseListPage';
 import CaseDetailPage from './pages_spa/CaseDetailPage';
 import LoginPage from './pages_spa/LoginPage';
+import TierTreePage from './pages_spa/TierTreePage';
+import RegistrationPage from './pages_spa/RegistrationPage';
+import AgencyListPage from './pages_spa/AgencyListPage';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -45,7 +48,6 @@ const SidebarLink = ({ to, icon, label, active }: { to: string; icon: string; la
   </Link>
 );
 
-// Changed children to optional to fix TypeScript error in JSX usage (lines 226-228)
 const Layout = ({ children }: { children?: React.ReactNode }) => {
   const { user, setUser, themeMode, toggleTheme } = useAppContext();
   const navigate = useNavigate();
@@ -93,12 +95,11 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         <nav style={{ flex: 1, padding: '0 16px' }}>
           <SidebarLink to="/" icon="fa-house" label="ダッシュボード" active={location.pathname === '/'} />
           <SidebarLink to="/cases" icon="fa-briefcase" label="案件管理" active={location.pathname.startsWith('/cases')} />
+          <SidebarLink to="/tree" icon="fa-sitemap" label="ティアツリー" active={location.pathname === '/tree'} />
           {user.role === UserRole.ADMIN && (
             <>
               <div style={{ margin: '32px 20px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Administrator</div>
-              <SidebarLink to="/invites" icon="fa-ticket" label="招待管理" active={location.pathname === '/invites'} />
               <SidebarLink to="/agencies" icon="fa-building" label="代理店管理" active={location.pathname === '/agencies'} />
-              <SidebarLink to="/audit-logs" icon="fa-shield-halved" label="監査ログ" active={location.pathname === '/audit-logs'} />
             </>
           )}
         </nav>
@@ -120,11 +121,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
               </div>
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.name}</div>
-                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? '管理者' : '代理店'}</div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? '管理者' : (user.status === 'agency' ? '代理店' : '顧客')}</div>
               </div>
             </div>
             
-            {/* Cycle Theme Toggle Button */}
             <button 
               className="theme-toggle-btn"
               onClick={toggleTheme}
@@ -171,8 +171,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  
-  // Theme state: 'light' | 'dark' | 'system'
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('theme-mode') as ThemeMode;
     return saved || 'system';
@@ -180,44 +178,16 @@ export default function App() {
 
   const applyTheme = (mode: ThemeMode) => {
     const html = document.documentElement;
-    let isDark = false;
-    
-    if (mode === 'system') {
-      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    } else {
-      isDark = mode === 'dark';
-    }
-
-    if (isDark) {
-      html.classList.add('dark-mode');
-      html.classList.remove('light-mode');
-    } else {
-      html.classList.remove('dark-mode');
-      html.classList.add('light-mode');
-    }
+    let isDark = mode === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : mode === 'dark';
+    html.classList.toggle('dark-mode', isDark);
     localStorage.setItem('theme-mode', mode);
   };
 
-  useEffect(() => {
-    applyTheme(themeMode);
-  }, [themeMode]);
-
-  // Handle system preference changes in 'system' mode
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      if (themeMode === 'system') {
-        applyTheme('system');
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [themeMode]);
+  useEffect(() => { applyTheme(themeMode); }, [themeMode]);
 
   const toggleTheme = () => {
     const modes: ThemeMode[] = ['system', 'light', 'dark'];
-    const nextIndex = (modes.indexOf(themeMode) + 1) % modes.length;
-    setThemeMode(modes[nextIndex]);
+    setThemeMode(modes[(modes.indexOf(themeMode) + 1) % modes.length]);
   };
 
   return (
@@ -225,9 +195,12 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegistrationPage />} />
           <Route path="/" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />} />
           <Route path="/cases" element={user ? <Layout><CaseListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/cases/:id" element={user ? <Layout><CaseDetailPage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/tree" element={user ? <Layout><TierTreePage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/agencies" element={user ? <Layout><AgencyListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

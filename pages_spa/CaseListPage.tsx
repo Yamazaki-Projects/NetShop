@@ -1,40 +1,50 @@
 
 import React, { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { CaseStatus, PlatformType, MallOpeningStatus } from '../types';
-import { Card, Input, Select, StatusBadge, Button, Badge } from '../components/UI';
-import { STATUS_LABELS } from '../constants';
+import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus } from '../types';
+import { Card, Input, Select, Button, Badge } from '../components/UI';
 
-type SortKey = 'customerName' | 'updatedAt' | 'agencyName' | 'status';
+type SortKey = 'customerName' | 'updatedAt' | 'agencyName' | 'rakuten' | 'yahoo' | 'aupay';
+type ListTab = 'mine' | 'team';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<ListTab>('mine');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'updatedAt', direction: 'desc' });
   
-  // Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
-    corporateNumber: '',
-    customerName: '',
+    // 法人情報
     companyName: '',
-    repBirthday: '',
+    companyNameKana: '',
+    representativeName: '',
+    representativeNameKana: '',
+    corporateNumber: '',
+    establishedDate: '',
+    zipCode: '',
+    address: '',
+    // 代表者情報
+    repName: '',
+    repNameKana: '',
+    repBirthDate: '',
     repZipCode: '',
     repAddress: '',
-    zipCode: '', // 法人郵便番号
-    address: '', // 法人住所
-    email: '',
     phone: '',
+    email: '',
     notes: ''
   });
 
-  const cases = db.getCases(user!);
+  const myCases = useMemo(() => user ? db.getCases(user) : [], [user]);
+  const teamCases = useMemo(() => user ? db.getTeamCases(user) : [], [user]);
+  const allUsers = useMemo(() => db.getUsers(), []);
+
+  const currentCases = activeTab === 'mine' ? myCases : teamCases;
 
   const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({
@@ -44,142 +54,95 @@ const CaseListPage = () => {
   };
 
   const filteredCases = useMemo(() => {
-    let result = cases.filter(c => {
+    let result = currentCases.filter(c => {
       const searchLower = search.toLowerCase();
       const matchesSearch = (c.customerName || '').toLowerCase().includes(searchLower) || 
                            (c.companyName?.toLowerCase().includes(searchLower)) ||
                            (c.agencyName || '').toLowerCase().includes(searchLower);
-      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
       const matchesPlatform = platformFilter === 'all' || c.platform === platformFilter;
-      return matchesSearch && matchesStatus && matchesPlatform;
+      return matchesSearch && matchesPlatform;
     });
 
-    result.sort((a, b) => {
-      let valA: any = a[sortConfig.key];
-      let valB: any = b[sortConfig.key];
-      if (sortConfig.key === 'updatedAt') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      }
-      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+    return result.sort((a, b) => {
+      let aVal: any = a[sortConfig.key as keyof Case];
+      let bVal: any = b[sortConfig.key as keyof Case];
+      
+      if (sortConfig.key === 'rakuten') aVal = a.mallProgress.rakuten;
+      if (sortConfig.key === 'yahoo') aVal = a.mallProgress.yahoo;
+      if (sortConfig.key === 'aupay') aVal = a.mallProgress.aupay;
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
+  }, [currentCases, search, platformFilter, sortConfig, activeTab]);
 
-    return result;
-  }, [cases, search, statusFilter, platformFilter, sortConfig]);
-
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortConfig.key !== k) return <i className="fa-solid fa-sort" style={{ marginLeft: '8px', opacity: 0.3 }}></i>;
-    return sortConfig.direction === 'asc' 
-      ? <i className="fa-solid fa-sort-up" style={{ marginLeft: '8px', color: 'var(--primary)' }}></i>
-      : <i className="fa-solid fa-sort-down" style={{ marginLeft: '8px', color: 'var(--primary)' }}></i>;
-  };
-
-  const handleCreateCase = (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    // ハイフンを除去するクレンジング処理
-    const cleanedData = {
+    // customerName は一覧表示用に代表者名（または会社名）をセット
+    const payload = {
       ...formData,
-      repZipCode: formData.repZipCode.replace(/-/g, ''),
-      zipCode: formData.zipCode.replace(/-/g, ''),
-      phone: formData.phone.replace(/-/g, ''),
-      corporateNumber: formData.corporateNumber.replace(/-/g, ''),
+      customerName: formData.repName || formData.companyName,
+      agencyId: user.agencyId || 'unknown',
+      agencyName: user.name,
+      status: CaseStatus.DRAFT,
+      platform: PlatformType.RAKUTEN
     };
 
-    const newCaseData: any = {
-      ...cleanedData,
-      platform: PlatformType.RAKUTEN,
-      agencyId: user.agencyId || 'ag1',
-      agencyName: user.role === 'admin' ? '本部直轄' : (db.getAgencies().find(a => a.id === user.agencyId)?.name || '不明な代理店'),
-      status: CaseStatus.SUBMITTED,
-      subline: { status: 'pending' },
-      emailJp: { status: 'pending' },
-    };
-
-    db.createCase(newCaseData, user);
+    const newCase = db.createCase(payload as any, user);
     setShowCreateModal(false);
-    resetForm();
-    navigate(0);
+    navigate(`/cases/${newCase.id}`);
   };
 
-  const resetForm = () => {
-    setFormData({
-      customerType: 'corporation',
-      corporateNumber: '',
-      customerName: '',
-      companyName: '',
-      repBirthday: '',
-      repZipCode: '',
-      repAddress: '',
-      zipCode: '',
-      address: '',
-      email: '',
-      phone: '',
-      notes: ''
-    });
+  const getProgressStyle = (status: MallOpeningStatus) => {
+    let color = '#94a3b8';
+    let bg = '#f1f5f9';
+    if (status === MallOpeningStatus.OPENED) { color = '#10b981'; bg = '#ecfdf5'; }
+    else if (status === MallOpeningStatus.APPLYING) { color = '#3b82f6'; bg = '#eff6ff'; }
+    else if (status === MallOpeningStatus.OVERSEAS_PREP) { color = '#f59e0b'; bg = '#fffbeb'; }
+    else if (status === MallOpeningStatus.SUSPENDED) { color = '#ef4444'; bg = '#fef2f2'; }
+    return { padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 800, color, backgroundColor: bg, display: 'inline-block', whiteSpace: 'nowrap' };
   };
 
-  const SectionHeader = ({ icon, title }: { icon: string, title: string }) => (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '8px', 
-      fontSize: '0.8rem', 
-      fontWeight: 800, 
-      color: 'var(--accent)', 
-      marginTop: '32px', 
-      marginBottom: '16px',
-      paddingBottom: '8px',
-      borderBottom: '1px solid var(--border)' 
-    }}>
-      <i className={`fa-solid ${icon}`}></i> {title}
-    </div>
-  );
+  const renderCustomerStatus = (email: string) => {
+    const targetUser = allUsers.find(u => u.email === email);
+    if (!targetUser) return null;
+    if (targetUser.status === UserStatus.AGENCY) return <Badge color="var(--primary)">代理店</Badge>;
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">申請中</Badge>;
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
+    return <Badge color="#94a3b8">顧客</Badge>;
+  };
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
-      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '40px' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
         <div style={{ textAlign: 'left' }}>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', marginBottom: '8px', letterSpacing: '-0.02em' }}>案件管理</h1>
-          <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>インフラ取得と3大モールの開店進捗を一元管理。</p>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.02em' }}>
+            案件管理 <span style={{ color: 'var(--primary)' }}>.</span>
+          </h1>
+          <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '4px' }}>案件の新規登録とステータス管理を行います。</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} style={{ padding: '14px 28px', fontSize: '1rem' }}>
-          <i className="fa-solid fa-plus"></i> 新規案件作成
+        <Button onClick={() => setShowCreateModal(true)}>
+          <i className="fa-solid fa-plus"></i> 新規案件登録
         </Button>
       </header>
 
-      {/* Search & Filter Bar */}
-      <div style={{ 
-        background: 'var(--bg-card)', 
-        padding: '28px', 
-        borderRadius: '20px', 
-        border: '1px solid var(--border)', 
-        marginBottom: '32px',
-        display: 'grid',
-        gridTemplateColumns: '2fr 1fr 1fr',
-        gap: '20px',
-        boxShadow: 'var(--shadow-sm)'
-      }}>
-        <Input 
-          placeholder="顧客名、会社名、代理店名で検索..." 
-          value={search} 
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ marginBottom: 0 }}
-        />
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginBottom: 0 }}>
-          <option value="all">すべてのステータス</option>
-          {Object.entries(STATUS_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </Select>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
+        <button onClick={() => setActiveTab('mine')} style={{ padding: '12px 24px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 800, color: activeTab === 'mine' ? 'var(--primary)' : 'var(--text-sub)', borderBottom: activeTab === 'mine' ? '3px solid var(--primary)' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>
+          自分の案件 ({myCases.length})
+        </button>
+        <button onClick={() => setActiveTab('team')} style={{ padding: '12px 24px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 800, color: activeTab === 'team' ? 'var(--accent)' : 'var(--text-sub)', borderBottom: activeTab === 'team' ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>
+          チームの案件 ({teamCases.length})
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <Input placeholder="顧客名・会社名で検索..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginBottom: 0 }} />
         <Select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} style={{ marginBottom: 0 }}>
-          <option value="all">主要プラットフォーム</option>
-          {Object.values(PlatformType).map(p => (
-            <option key={p} value={p}>{p}</option>
-          ))}
+          <option value="all">すべてのプラットフォーム</option>
+          {Object.values(PlatformType).map(p => <option key={p} value={p}>{p}</option>)}
         </Select>
       </div>
 
@@ -188,151 +151,81 @@ const CaseListPage = () => {
           <table>
             <thead>
               <tr>
-                <th className="align-left" style={{ width: '20%', cursor: 'pointer' }} onClick={() => handleSort('customerName')}>
-                  顧客情報 <SortIcon k="customerName" />
-                </th>
-                <th className="align-left">モール開店進捗</th>
-                <th className="align-left" style={{ cursor: 'pointer' }} onClick={() => handleSort('agencyName')}>
-                  担当代理店 <SortIcon k="agencyName" />
-                </th>
-                <th className="align-center" style={{ cursor: 'pointer' }} onClick={() => handleSort('status')}>
-                  全体状況 <SortIcon k="status" />
-                </th>
-                <th className="align-right" style={{ cursor: 'pointer' }} onClick={() => handleSort('updatedAt')}>
-                  最終更新 <SortIcon k="updatedAt" />
-                </th>
-                <th style={{ width: '80px' }}></th>
+                <th className="align-left" onClick={() => handleSort('customerName')} style={{ cursor: 'pointer' }}>顧客名 {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                {activeTab === 'team' && <th className="align-left">担当代理店</th>}
+                <th className="align-center">楽天市場</th>
+                <th className="align-center">Yahoo!</th>
+                <th className="align-center">au PAY</th>
+                <th className="align-right" onClick={() => handleSort('updatedAt')} style={{ cursor: 'pointer' }}>更新日 {sortConfig.key === 'updatedAt' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
               </tr>
             </thead>
             <tbody>
               {filteredCases.map(c => (
-                <tr key={c.id}>
+                <tr key={c.id} onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: 'pointer' }}>
                   <td className="align-left">
-                    <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.95rem' }}>{c.customerName || '---'}</div>
-                    {c.companyName && <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600, marginTop: '2px' }}>{c.companyName}</div>}
-                  </td>
-                  <td className="align-left">
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <span title="楽天" style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, background: '#bf0000', color: 'white' }}>R: {c.mallProgress.rakuten}</span>
-                      <span title="Yahoo" style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, background: '#ff0033', color: 'white' }}>Y: {c.mallProgress.yahoo}</span>
-                      <span title="auPAY" style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, background: '#f58220', color: 'white' }}>A: {c.mallProgress.aupay}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ fontWeight: 800 }}>{c.customerName}</div>
+                      {renderCustomerStatus(c.email)}
                     </div>
                   </td>
-                  <td className="align-left">
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>{c.agencyName}</span>
-                  </td>
-                  <td className="align-center">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="align-right">
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-sub)' }}>
-                      {new Date(c.updatedAt).toLocaleDateString('ja-JP')}
-                    </span>
-                  </td>
-                  <td className="align-right">
-                    <Link to={`/cases/${c.id}`}>
-                      <Button variant="ghost" style={{ padding: '8px 12px' }}>
-                        <i className="fa-solid fa-chevron-right"></i>
-                      </Button>
-                    </Link>
-                  </td>
+                  {activeTab === 'team' && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
+                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.rakuten)}>{c.mallProgress.rakuten}</span></td>
+                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.yahoo)}>{c.mallProgress.yahoo}</span></td>
+                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.aupay)}>{c.mallProgress.aupay}</span></td>
+                  <td className="align-right">{new Date(c.updatedAt).toLocaleDateString()}</td>
                 </tr>
               ))}
-              {filteredCases.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--text-sub)' }}>
-                    案件が見つかりませんでした。
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* Creation Modal */}
       {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(2, 6, 23, 0.7)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '24px'
-        }} onClick={() => setShowCreateModal(false)}>
-          <div style={{
-            width: '100%',
-            maxWidth: '720px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            background: 'var(--bg-card)',
-            borderRadius: '24px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            border: '1px solid var(--border)'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>新規案件作成</h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-sub)', cursor: 'pointer', fontSize: '1.25rem' }}>
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }} onClick={() => setShowCreateModal(false)}>
+          <div style={{ background: 'var(--bg-card)', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', padding: '40px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 900, marginBottom: '32px' }}>新規案件登録</h2>
             
-            <form onSubmit={handleCreateCase} style={{ padding: '32px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <Select label="顧客種別" value={formData.customerType} onChange={e => setFormData({...formData, customerType: e.target.value as any})}>
-                  <option value="corporation">法人</option>
-                  <option value="sole_proprietor">個人事業主</option>
-                </Select>
-                {formData.customerType === 'corporation' && (
-                  <Input label="法人番号" value={formData.corporateNumber} onChange={e => setFormData({...formData, corporateNumber: e.target.value})} placeholder="13桁の番号 (ハイフンなし)" />
-                )}
+            <form onSubmit={handleCreate}>
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, borderBottom: '2px solid var(--primary)', paddingBottom: '8px', marginBottom: '20px', color: 'var(--primary)' }}>基本設定</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <Select label="顧客種別" value={formData.customerType} onChange={e => setFormData({...formData, customerType: e.target.value as any})}>
+                    <option value="corporation">法人</option>
+                    <option value="sole_proprietor">個人事業主</option>
+                  </Select>
+                  <Input label="メールアドレス" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required placeholder="yamada@example.com" />
+                </div>
               </div>
 
-              {/* 代表者情報セクション */}
-              <SectionHeader icon="fa-user-tie" title="代表者情報" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <Input label="代表者名" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} placeholder="例: 田中 太郎" />
-                <Input label="生年月日" type="date" value={formData.repBirthday} onChange={e => setFormData({...formData, repBirthday: e.target.value})} />
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, borderBottom: '2px solid var(--border)', paddingBottom: '8px', marginBottom: '20px' }}>法人情報</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <Input label="法人名/屋号" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} required />
+                  <Input label="法人名/屋号ふりがな" value={formData.companyNameKana} onChange={e => setFormData({...formData, companyNameKana: e.target.value})} required />
+                  <Input label="代表者名" value={formData.representativeName} onChange={e => setFormData({...formData, representativeName: e.target.value})} required />
+                  <Input label="代表者名ふりがな" value={formData.representativeNameKana} onChange={e => setFormData({...formData, representativeNameKana: e.target.value})} required />
+                  <Input label="法人番号 (13桁)" value={formData.corporateNumber} onChange={e => setFormData({...formData, corporateNumber: e.target.value})} maxLength={13} />
+                  <Input label="設立年月日" type="date" value={formData.establishedDate} onChange={e => setFormData({...formData, establishedDate: e.target.value})} />
+                  <Input label="法人郵便番号 (ハイフンなし)" value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} maxLength={7} />
+                  <Input label="法人住所" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '24px' }}>
-                <Input label="郵便番号 (代表者)" value={formData.repZipCode} onChange={e => setFormData({...formData, repZipCode: e.target.value})} placeholder="1234567 (ハイフンなし)" />
-                <Input label="代表者住所" value={formData.repAddress} onChange={e => setFormData({...formData, repAddress: e.target.value})} placeholder="東京都渋谷区... (アパート名まで)" />
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, borderBottom: '2px solid var(--border)', paddingBottom: '8px', marginBottom: '20px' }}>代表者情報 (個人)</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <Input label="名前" value={formData.repName} onChange={e => setFormData({...formData, repName: e.target.value})} required />
+                  <Input label="名前ふりがな" value={formData.repNameKana} onChange={e => setFormData({...formData, repNameKana: e.target.value})} required />
+                  <Input label="生年月日" type="date" value={formData.repBirthDate} onChange={e => setFormData({...formData, repBirthDate: e.target.value})} />
+                  <Input label="代表者郵便番号 (ハイフンなし)" value={formData.repZipCode} onChange={e => setFormData({...formData, repZipCode: e.target.value})} maxLength={7} />
+                  <Input label="代表者住所" value={formData.repAddress} onChange={e => setFormData({...formData, repAddress: e.target.value})} />
+                  <Input label="携帯電話番号 (ハイフンなし)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required maxLength={11} />
+                </div>
               </div>
-
-              {/* 法人/屋号情報セクション */}
-              <SectionHeader icon="fa-building" title="法人 / 屋号情報" />
-              <Input label="法人名 / 屋号" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} placeholder="例: 株式会社サンプル / サンプル商店" />
               
-              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '24px' }}>
-                <Input label="郵便番号 (法人)" value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} placeholder="1234567 (ハイフンなし)" />
-                <Input label="法人住所" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="東京都新宿区... (ビル・階数まで)" />
-              </div>
-
-              {/* 連絡先セクション */}
-              <SectionHeader icon="fa-address-book" title="連絡先・その他" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <Input label="メールアドレス" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="example@test.com" />
-                <Input label="携帯電話番号" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="09012345678 (ハイフンなし)" />
-              </div>
-              
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.875rem', fontWeight: 800 }}>備考</label>
-                <textarea 
-                  value={formData.notes} 
-                  onChange={e => setFormData({...formData, notes: e.target.value})}
-                  className="input-field"
-                  style={{ minHeight: '100px', resize: 'vertical' }}
-                  placeholder="特記事項があれば入力してください"
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', marginTop: '40px' }}>
-                <Button variant="ghost" onClick={() => setShowCreateModal(false)} style={{ flex: 1 }}>キャンセル</Button>
-                <Button type="submit" style={{ flex: 2 }}>情報を保存して案件を作成</Button>
+              <div style={{ marginTop: '32px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <Button variant="ghost" onClick={() => setShowCreateModal(false)}>キャンセル</Button>
+                <Button type="submit">案件を登録する</Button>
               </div>
             </form>
           </div>
