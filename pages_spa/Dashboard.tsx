@@ -49,10 +49,13 @@ const Dashboard = () => {
     loadData();
   }, [user]);
 
-  if (!user || loading) return <div style={{ padding: '48px', textAlign: 'center' }}>読み込み中...</div>;
+  if (!user || loading) return (
+    <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+      <i className="fa-solid fa-circle-notch fa-spin fa-2x" style={{ color: 'var(--primary)' }}></i>
+    </div>
+  );
 
   const isAdmin = user.role === UserRole.ADMIN;
-  const isAgency = user.status === UserStatus.AGENCY && !isAdmin;
 
   const estimatedRevenue = cases
     .filter(c => c.status === CaseStatus.APPROVED)
@@ -64,12 +67,14 @@ const Dashboard = () => {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
-      <header style={{ marginBottom: '48px' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900 }}>Welcome back, {user.name}</h1>
-        <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>Supabase から最新情報を同期しています。</p>
+      <header style={{ marginBottom: '48px', textAlign: 'left' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>Welcome back, {user.name} <span style={{ color: 'var(--accent)' }}>👋</span></h1>
+        <p style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: '1.1rem', marginTop: '8px' }}>
+          ログインID: <Badge color="var(--primary)" style={{ fontSize: '0.85rem' }}>{user.loginId}</Badge> として認証されています。
+        </p>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '28px', marginBottom: '48px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px', marginBottom: '48px' }}>
         {isAdmin ? (
           <>
             <StatCard title="全代理店数" value={`${users.filter(u => u.status === UserStatus.AGENCY).length} 名`} icon="fa-users" gradient="var(--grad-primary)" />
@@ -78,28 +83,63 @@ const Dashboard = () => {
           </>
         ) : (
           <>
-            <StatCard title="現在の報酬率" value={`${Math.round(currentRate * 100)}%`} icon="fa-percent" gradient="var(--grad-primary)" />
+            <StatCard title="現在の報酬率" value={`${Math.round(currentRate * 100)}%`} icon="fa-percent" gradient="var(--grad-primary)" subtext={`承認数 ${approvedCount}件 に基づく`} />
             <StatCard title="承認案件数" value={`${approvedCount} 件`} icon="fa-handshake" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
-            <StatCard title="見込み報酬" value={`¥${estimatedRevenue.toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
+            <StatCard title="確定報酬額" value={`¥${estimatedRevenue.toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
           </>
         )}
       </div>
 
-      <Card title="最近の案件">
-        <table>
-          <thead>
-            <tr><th>顧客名</th><th className="align-right">ステータス</th></tr>
-          </thead>
-          <tbody>
-            {cases.slice(0, 5).map(c => (
-              <tr key={c.id}>
-                <td>{c.customerName}</td>
-                <td className="align-right"><Badge color="var(--primary)">{c.status}</Badge></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
+        <Card title="最近の案件" style={{ textAlign: 'left' }}>
+          <table>
+            <thead>
+              <tr><th>顧客名</th><th className="align-right">進捗</th></tr>
+            </thead>
+            <tbody>
+              {cases.length > 0 ? cases.slice(0, 5).map(c => (
+                <tr key={c.id}>
+                  <td>
+                    <div style={{ fontWeight: 800 }}>{c.customerName}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>{c.id}</div>
+                  </td>
+                  <td className="align-right">
+                    <Badge color="var(--primary)" style={{ fontSize: '0.7rem' }}>{c.status}</Badge>
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan={2} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-sub)' }}>案件がありません</td></tr>
+              )}
+            </tbody>
+          </table>
+          <div style={{ padding: '20px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+            <Link to="/cases" style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 800, textDecoration: 'none' }}>すべての案件を見る</Link>
+          </div>
+        </Card>
+
+        <Card title="システム通知" style={{ textAlign: 'left' }}>
+           <div style={{ padding: '24px' }}>
+             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+               <div style={{ padding: '10px', background: '#eff6ff', borderRadius: '10px', height: 'fit-content' }}>
+                 <i className="fa-solid fa-bell" style={{ color: '#3b82f6' }}></i>
+               </div>
+               <div>
+                 <div style={{ fontSize: '0.9rem', fontWeight: 800 }}>報酬率アップのチャンス</div>
+                 <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '4px', lineHeight: 1.5 }}>承認案件が2件以上になると報酬率が40%にアップします。現在の承認数は {approvedCount}件 です。</p>
+               </div>
+             </div>
+             <div style={{ display: 'flex', gap: '16px' }}>
+               <div style={{ padding: '10px', background: '#fef2f2', borderRadius: '10px', height: 'fit-content' }}>
+                 <i className="fa-solid fa-triangle-exclamation" style={{ color: '#ef4444' }}></i>
+               </div>
+               <div>
+                 <div style={{ fontSize: '0.9rem', fontWeight: 800 }}>本人確認の不備にご注意ください</div>
+                 <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '4px', lineHeight: 1.5 }}>最近、提出書類の画像が不鮮明なケースが増えています。スキャナまたは高解像度カメラをご利用ください。</p>
+               </div>
+             </div>
+           </div>
+        </Card>
+      </div>
     </div>
   );
 };

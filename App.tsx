@@ -11,6 +11,7 @@ import LoginPage from './pages_spa/LoginPage';
 import TierTreePage from './pages_spa/TierTreePage';
 import RegistrationPage from './pages_spa/RegistrationPage';
 import AgencyListPage from './pages_spa/AgencyListPage';
+import AgencyApprovalPage from './pages_spa/AgencyApprovalPage';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -99,7 +100,8 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           {user.role === UserRole.ADMIN && (
             <>
               <div style={{ margin: '32px 20px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Administrator</div>
-              <SidebarLink to="/agencies" icon="fa-building" label="代理店管理" active={location.pathname === '/agencies'} />
+              <SidebarLink to="/approvals" icon="fa-user-check" label="代理店承認" active={location.pathname === '/approvals'} />
+              <SidebarLink to="/agencies" icon="fa-building-columns" label="代理店一覧" active={location.pathname === '/agencies'} />
             </>
           )}
         </nav>
@@ -121,18 +123,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
               </div>
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.name}</div>
-                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{user.role === UserRole.ADMIN ? '管理者' : (user.status === 'agency' ? '代理店' : '顧客')}</div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>ID: {user.loginId}</div>
               </div>
             </div>
-            
-            <button 
-              className="theme-toggle-btn"
-              onClick={toggleTheme}
-              title={`現在の設定: ${getThemeLabel()}`}
-            >
-              <i className={`fa-solid ${getThemeIcon()}`}></i>
-              <span>{getThemeLabel()}</span>
-            </button>
           </div>
           <button 
             onClick={() => { setUser(null); navigate('/login'); }}
@@ -201,6 +194,7 @@ export default function App() {
           <Route path="/cases/:id" element={user ? <Layout><CaseDetailPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/tree" element={user ? <Layout><TierTreePage /></Layout> : <Navigate to="/login" />} />
           <Route path="/agencies" element={user ? <Layout><AgencyListPage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/approvals" element={user ? <Layout><AgencyApprovalPage /></Layout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

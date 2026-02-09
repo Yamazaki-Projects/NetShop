@@ -5,75 +5,152 @@ import {
 import { supabase } from './supabaseClient';
 
 class DBService {
+  // ログインIDを内部用メールアドレスに変換
+  private toInternalEmail(loginId: string): string {
+    if (loginId.includes('@')) return loginId;
+    return `${loginId}@net-shop.com`;
+  }
+
   /**
-   * ログイン処理
-   * 1. Supabase Auth での認証を試行 (emailの場合)
-   * 2. 失敗した場合、usersテーブルの login_id と password を直接照合 (フォールバック)
+   * ログイン処理 (Supabase Auth)
    */
-  async login(identity: string, pass: string): Promise<User | null> {
-    // 1. Supabase Auth 試行 (メールアドレス形式の場合)
-    if (identity.includes('@')) {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: identity,
-        password: pass,
-      });
+  async login(loginId: string, pass: string): Promise<User | null> {
+    const email = this.toInternalEmail(loginId);
+    
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password: pass,
+    });
 
-      if (!authError && authData.user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-        if (profile) return this.mapUser(profile);
-      }
-    }
+    if (authError || !authData.user) return null;
 
-    // 2. フォールバック: usersテーブルを直接検索 (login_id または email)
-    const { data: userRecord, error: userError } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('users')
       .select('*')
-      .or(`login_id.eq.${identity},email.eq.${identity}`)
-      .eq('password', pass) // 注意: 開発/移行用。本番ではハッシュ化が推奨されます
+      .eq('id', authData.user.id)
       .single();
 
-    if (userError || !userRecord) return null;
-    return this.mapUser(userRecord);
+    if (profileError) return null;
+    return this.mapUser(profile);
   }
 
   /**
-   * ユーザー一覧取得
-   */
-  async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return (data as any[]).map((u: any) => this.mapUser(u));
-  }
-
-  /**
-   * メールアドレスからユーザーを取得する
+   * メールアドレスからユーザーを取得
    */
   async getUserByEmail(email: string): Promise<User | null> {
-    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
     if (error) return null;
     return this.mapUser(data);
   }
 
   /**
-   * 案件一覧取得
+   * 管理者：承認待ちの申請一覧を取得
    */
+  async getPendingApplications(): Promise<User[]> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('agency_application_status', AgencyApplicationStatus.PENDING)
+      .order('created_at', { ascending: true });
+    
+    if (error) return [];
+    return (data as any[]).map(u => this.mapUser(u));
+  }
+
+  /**
+   * 代理店昇格申請を行う
+   */
+  async applyForAgency(userId: string, actor: User): Promise<{ ok: boolean }> {
+    const { error } = await supabase
+      .from('users')
+      .update({ agency_application_status: AgencyApplicationStatus.PENDING })
+      .eq('id', userId);
+    return { ok: !error };
+  }
+
+  /**
+   * 管理者：代理店申請を承認 (Vercel API経由)
+   */
+  async approveApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const res = await fetch('/api/admin/agent-applications/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId })
+      });
+      return await res.json();
+    } catch (e) {
+      return { ok: false, message: '通信エラーが発生しました' };
+    }
+  }
+
+  /**
+   * 管理者：代理店申請を却下 (Vercel API経由)
+   */
+  async rejectApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const res = await fetch('/api/admin/agent-applications/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId })
+      });
+      return await res.json();
+    } catch (e) {
+      return { ok: false, message: '通信エラーが発生しました' };
+    }
+  }
+
+  /**
+   * 新規登録：顧客IDの有効性チェック (Vercel API経由)
+   */
+  async checkRegistrationEligibility(customerId: string): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      const res = await fetch(`/api/agent-registration/check?customerId=${customerId}`);
+      return await res.json();
+    } catch (e) {
+      return { ok: false, reason: 'network_error' };
+    }
+  }
+
+  /**
+   * 新規登録：パスワード設定と完了 (Vercel API経由)
+   */
+  async completeRegistration(customerId: string, password: string): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      const res = await fetch('/api/agent-registration/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, password })
+      });
+      return await res.json();
+    } catch (e) {
+      return { ok: false, reason: 'network_error' };
+    }
+  }
+
+  // 既存のメソッドはそのまま（必要に応じてマッピング調整）
+  async getUsers(): Promise<User[]> {
+    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return (data as any[]).map(u => this.mapUser(u));
+  }
+
   async getCases(user: User): Promise<Case[]> {
     let query = supabase.from('cases').select('*');
     if (user.role !== UserRole.ADMIN) {
       query = query.eq('referrer_id', user.id);
     }
     const { data, error } = await query.order('updated_at', { ascending: false });
-    if (error) return [];
-    return (data as any[]).map((c: any) => this.mapCase(c));
+    return (data as any[] || []).map(c => this.mapCase(c));
   }
 
   async getAllCases(): Promise<Case[]> {
     const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
-    return ((data as any[]) || []).map((c: any) => this.mapCase(c));
+    return (data as any[] || []).map(c => this.mapCase(c));
   }
 
   async getCaseById(id: string): Promise<Case | null> {
@@ -82,101 +159,74 @@ class DBService {
     return this.mapCase(data);
   }
 
-  async createCase(newCaseData: Partial<Case>, actor: User): Promise<Case | null> {
+  async createCase(newCaseData: any, actor: User): Promise<Case | null> {
     const rate = await this.calculateRate(actor.id);
     const baseAmount = actor.manualBaseAmountOverride || 198000;
-    
     const dbPayload = {
+      ...newCaseData,
       agency_id: actor.id,
       agency_name: actor.name,
       referrer_id: actor.id,
       status: CaseStatus.DRAFT,
-      platform: newCaseData.platform,
-      customer_type: newCaseData.customerType,
-      company_name: newCaseData.companyName,
-      company_name_kana: newCaseData.companyNameKana,
-      representative_name: newCaseData.representativeName,
-      representative_name_kana: newCaseData.representativeNameKana,
-      corporate_number: newCaseData.corporateNumber,
-      established_date: newCaseData.establishedDate,
-      zip_code: newCaseData.zipCode,
-      address: newCaseData.address,
-      rep_name: newCaseData.repName,
-      rep_name_kana: newCaseData.repNameKana,
-      rep_birth_date: newCaseData.repBirthDate,
-      rep_zip_code: newCaseData.repZipCode,
-      rep_address: newCaseData.repAddress,
-      phone: newCaseData.phone,
-      email: newCaseData.email,
       base_amount: baseAmount,
       applied_rate: rate,
       mall_progress: { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
-      tasks: [
-        { id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO },
-        { id: 't2', title: '口座情報の登録', status: TaskStatus.TODO },
-      ]
+      tasks: [{ id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO }]
     };
-
     const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
     if (error) return null;
-    await this.logAction(actor, '案件作成', 'case', data.id, { baseAmount });
     return this.mapCase(data);
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
     const { data, error } = await supabase.from('cases').update(updates).eq('id', id).select().single();
     if (error) return null;
-    await this.logAction(actor, '案件更新', 'case', id, updates);
     return this.mapCase(data);
   }
 
   async getApprovedCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .eq('referrer_id', userId)
-      .eq('status', CaseStatus.APPROVED);
+    const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
     return count || 0;
   }
 
   async calculateRate(userId: string): Promise<number> {
-    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
-    if (!user) return 0.3;
-    if (user.manual_rate_override !== null && user.manual_rate_override !== undefined) return user.manual_rate_override;
+    const { data } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!data) return 0.3;
+    if (data.manual_rate_override != null) return data.manual_rate_override;
     const count = await this.getApprovedCount(userId);
-    if (count >= 11) return 0.50;
-    if (count >= 2) return 0.40;
-    return 0.30;
+    return count >= 11 ? 0.5 : (count >= 2 ? 0.4 : 0.3);
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
-    const downlineIds = await this.getDownlineUserIds(user.id);
-    if (downlineIds.length === 0) return [];
-    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', downlineIds);
-    if (error) return [];
-    return (data as any[]).map((c: any) => this.mapCase(c));
+    const ids = await this.getDownlineUserIds(user.id);
+    if (ids.length === 0) return [];
+    const { data } = await supabase.from('cases').select('*').in('referrer_id', ids);
+    return (data as any[] || []).map(c => this.mapCase(c));
   }
 
   async getDownlineUserIds(userId: string): Promise<string[]> {
     const { data } = await supabase.from('users').select('id').eq('referrer_id', userId);
     if (!data) return [];
-    let ids = (data as any[]).map((u: any) => u.id);
-    for (const id of (data as any[]).map((u: any) => u.id)) {
+    let ids = data.map(u => u.id);
+    for (const id of data.map(u => u.id)) {
       const subIds = await this.getDownlineUserIds(id);
       ids = [...ids, ...subIds];
     }
     return Array.from(new Set(ids));
   }
 
-  async logAction(actor: User, action: string, targetType: string, targetId: string, metadata: any) {
-    await supabase.from('audit_logs').insert([{
-      actor_user_id: actor.id,
-      actor_name: actor.name,
-      action,
-      target_type: targetType,
-      target_id: targetId,
-      metadata
-    }]);
+  /**
+   * ユーザーの報酬設定を更新する
+   */
+  async updateUserRewardConfig(userId: string, config: { manualBaseAmountOverride: number, manualRateOverride: number }, actor: User): Promise<{ ok: boolean }> {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        manual_base_amount_override: config.manualBaseAmountOverride,
+        manual_rate_override: config.manualRateOverride
+      })
+      .eq('id', userId);
+    return { ok: !error };
   }
 
   private mapUser(u: any): User {
@@ -234,53 +284,6 @@ class DBService {
       documents: [],
       reviews: []
     };
-  }
-
-  async approveAgency(userId: string, actor: User) {
-    await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.APPROVED }).eq('id', userId);
-    await this.logAction(actor, '代理店昇格承認', 'user', userId, {});
-  }
-
-  async applyForAgency(userId: string, actor: User) {
-    await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', userId);
-    await this.logAction(actor, '代理店昇格申請', 'user', userId, {});
-  }
-
-  /**
-   * 認証用IDの有効性チェック
-   */
-  async verifyRegistrationId(loginId: string): Promise<User | null> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('login_id', loginId)
-      .eq('agency_application_status', AgencyApplicationStatus.APPROVED)
-      .eq('status', UserStatus.CUSTOMER)
-      .single();
-    if (error) return null;
-    return this.mapUser(data);
-  }
-
-  /**
-   * パスワード設定と代理店ステータスへの更新
-   */
-  async completeRegistration(userId: string, password: string): Promise<void> {
-    await supabase.from('users').update({ 
-      status: UserStatus.AGENCY,
-      password: password
-    }).eq('id', userId);
-  }
-
-  /**
-   * 代理店の報酬設定変更
-   */
-  async updateUserRewardConfig(userId: string, config: any, actor: User) {
-    const updates = {
-      manual_base_amount_override: config.manualBaseAmountOverride,
-      manual_rate_override: config.manualRateOverride
-    };
-    await supabase.from('users').update(updates).eq('id', userId);
-    await this.logAction(actor, '報酬設定変更', 'user', userId, config);
   }
 }
 
