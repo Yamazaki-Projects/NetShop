@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { TaskStatus, MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case } from '../types';
+import { TaskStatus, MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User } from '../types';
 import { Card, Button, Badge, Input, Select } from '../components/UI';
 import { TASK_STATUS_COLORS } from '../constants';
 
@@ -24,37 +24,55 @@ const CaseDetailPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>('rakuten');
   const [isEditing, setIsEditing] = useState(false);
   const [editedCase, setEditedCase] = useState<any>(null);
+  
+  const [caseData, setCaseData] = useState<Case | null>(null);
+  const [customerUser, setCustomerUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const caseData = db.getCaseById(id || '');
-  const customerUser = caseData ? db.getUserByEmail(caseData.email) : null;
+  useEffect(() => {
+    const loadData = async () => {
+      if (!id) return;
+      setLoading(true);
+      const c = await db.getCaseById(id);
+      if (c) {
+        setCaseData(c);
+        const u = await db.getUserByEmail(c.email);
+        setCustomerUser(u);
+      }
+      setLoading(false);
+    };
+    loadData();
+  }, [id]);
 
+  if (loading) return <div style={{ padding: '48px', textAlign: 'center' }}>読み込み中...</div>;
   if (!caseData || !user) return <div style={{ padding: '48px', textAlign: 'center' }}>案件が見つかりませんでした。</div>;
 
   const isAdmin = user.role === UserRole.ADMIN;
 
-  const handleTaskToggle = (taskId: string, currentStatus: TaskStatus) => {
+  const handleTaskToggle = async (taskId: string, currentStatus: TaskStatus) => {
     const statuses: TaskStatus[] = [TaskStatus.TODO, TaskStatus.DOING, TaskStatus.WAITING, TaskStatus.DONE];
     const nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
-    db.updateCase(caseData.id, { 
+    await db.updateCase(caseData.id, { 
       tasks: caseData.tasks.map(t => t.id === taskId ? { ...t, status: statuses[nextIndex] } : t)
     }, user);
     navigate(0);
   };
 
-  const handleMallStatusChange = (mall: 'rakuten' | 'yahoo' | 'aupay', status: MallOpeningStatus) => {
+  const handleMallStatusChange = async (mall: 'rakuten' | 'yahoo' | 'aupay', status: MallOpeningStatus) => {
     const updatedMallProgress = { ...caseData.mallProgress, [mall]: status };
-    db.updateCase(caseData.id, { mallProgress: updatedMallProgress }, user);
+    await db.updateCase(caseData.id, { mallProgress: updatedMallProgress }, user);
     navigate(0);
   };
 
-  const handleFinancialUpdate = (updates: Partial<Case>) => {
+  const handleFinancialUpdate = async (updates: Partial<Case>) => {
     if (!isAdmin) return;
-    db.updateCase(caseData.id, updates, user);
+    await db.updateCase(caseData.id, updates, user);
     navigate(0);
   };
 
-  const handleApplyAgency = () => {
-    if (customerUser && db.applyForAgency(customerUser.id, user)) {
+  const handleApplyAgency = async () => {
+    if (customerUser) {
+      await db.applyForAgency(customerUser.id, user);
       alert('代理店昇格申請を送信しました。');
       navigate(0);
     }
@@ -65,10 +83,12 @@ const CaseDetailPage = () => {
     setIsEditing(true);
   };
 
-  const saveChanges = () => {
-    db.updateCase(caseData.id, editedCase, user);
-    setIsEditing(false);
-    navigate(0);
+  const saveChanges = async () => {
+    if (caseData) {
+      await db.updateCase(caseData.id, editedCase, user);
+      setIsEditing(false);
+      navigate(0);
+    }
   };
 
   const InfoRow = ({ label, value, field, group, isDate }: { label: string; value?: string | React.ReactNode, field?: string, group?: string, isDate?: boolean }) => (

@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus } from '../types';
+import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User } from '../types';
 import { Card, Input, Select, Button, Badge } from '../components/UI';
 
 type SortKey = 'customerName' | 'updatedAt' | 'agencyName' | 'rakuten' | 'yahoo' | 'aupay';
@@ -17,6 +17,11 @@ const CaseListPage = () => {
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'updatedAt', direction: 'desc' });
   
+  const [myCases, setMyCases] = useState<Case[]>([]);
+  const [teamCases, setTeamCases] = useState<Case[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
@@ -40,9 +45,22 @@ const CaseListPage = () => {
     notes: ''
   });
 
-  const myCases = useMemo(() => user ? db.getCases(user) : [], [user]);
-  const teamCases = useMemo(() => user ? db.getTeamCases(user) : [], [user]);
-  const allUsers = useMemo(() => db.getUsers(), []);
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) return;
+      setLoading(true);
+      const [m, t, u] = await Promise.all([
+        db.getCases(user),
+        db.getTeamCases(user),
+        db.getUsers()
+      ]);
+      setMyCases(m);
+      setTeamCases(t);
+      setAllUsers(u);
+      setLoading(false);
+    };
+    loadData();
+  }, [user]);
 
   const currentCases = activeTab === 'mine' ? myCases : teamCases;
 
@@ -77,11 +95,10 @@ const CaseListPage = () => {
     });
   }, [currentCases, search, platformFilter, sortConfig, activeTab]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    // customerName は一覧表示用に代表者名（または会社名）をセット
     const payload = {
       ...formData,
       customerName: formData.repName || formData.companyName,
@@ -91,9 +108,11 @@ const CaseListPage = () => {
       platform: PlatformType.RAKUTEN
     };
 
-    const newCase = db.createCase(payload as any, user);
-    setShowCreateModal(false);
-    navigate(`/cases/${newCase.id}`);
+    const newCase = await db.createCase(payload as any, user);
+    if (newCase) {
+      setShowCreateModal(false);
+      navigate(`/cases/${newCase.id}`);
+    }
   };
 
   const getProgressStyle = (status: MallOpeningStatus) => {
@@ -147,37 +166,41 @@ const CaseListPage = () => {
       </div>
 
       <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th className="align-left" onClick={() => handleSort('customerName')} style={{ cursor: 'pointer' }}>顧客名 {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                {activeTab === 'team' && <th className="align-left">担当代理店</th>}
-                <th className="align-center">楽天市場</th>
-                <th className="align-center">Yahoo!</th>
-                <th className="align-center">au PAY</th>
-                <th className="align-right" onClick={() => handleSort('updatedAt')} style={{ cursor: 'pointer' }}>更新日 {sortConfig.key === 'updatedAt' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCases.map(c => (
-                <tr key={c.id} onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: 'pointer' }}>
-                  <td className="align-left">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ fontWeight: 800 }}>{c.customerName}</div>
-                      {renderCustomerStatus(c.email)}
-                    </div>
-                  </td>
-                  {activeTab === 'team' && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
-                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.rakuten)}>{c.mallProgress.rakuten}</span></td>
-                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.yahoo)}>{c.mallProgress.yahoo}</span></td>
-                  <td className="align-center"><span style={getProgressStyle(c.mallProgress.aupay)}>{c.mallProgress.aupay}</span></td>
-                  <td className="align-right">{new Date(c.updatedAt).toLocaleDateString()}</td>
+        {loading ? (
+          <div style={{ padding: '48px', textAlign: 'center' }}>読み込み中...</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th className="align-left" onClick={() => handleSort('customerName')} style={{ cursor: 'pointer' }}>顧客名 {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  {activeTab === 'team' && <th className="align-left">担当代理店</th>}
+                  <th className="align-center">楽天市場</th>
+                  <th className="align-center">Yahoo!</th>
+                  <th className="align-center">au PAY</th>
+                  <th className="align-right" onClick={() => handleSort('updatedAt')} style={{ cursor: 'pointer' }}>更新日 {sortConfig.key === 'updatedAt' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredCases.map(c => (
+                  <tr key={c.id} onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: 'pointer' }}>
+                    <td className="align-left">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ fontWeight: 800 }}>{c.customerName}</div>
+                        {renderCustomerStatus(c.email)}
+                      </div>
+                    </td>
+                    {activeTab === 'team' && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
+                    <td className="align-center"><span style={getProgressStyle(c.mallProgress.rakuten)}>{c.mallProgress.rakuten}</span></td>
+                    <td className="align-center"><span style={getProgressStyle(c.mallProgress.yahoo)}>{c.mallProgress.yahoo}</span></td>
+                    <td className="align-center"><span style={getProgressStyle(c.mallProgress.aupay)}>{c.mallProgress.aupay}</span></td>
+                    <td className="align-right">{new Date(c.updatedAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {showCreateModal && (

@@ -12,38 +12,55 @@ const RegistrationPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [targetUser, setTargetUser] = useState<User | null>(null);
 
-  const handleVerifyId = (e: React.FormEvent) => {
+  const handleVerifyId = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
-    const user = db.verifyRegistrationId(loginId);
-    if (user) {
-      setTargetUser(user);
-      setStep(2);
-    } else {
-      setError('入力されたIDは存在しないか、代理店としての登録が許可されていません。管理者にお問い合わせください。');
+    try {
+      const user = await db.verifyRegistrationId(loginId);
+      if (user) {
+        setTargetUser(user);
+        setStep(2);
+      } else {
+        setError('入力されたIDは存在しないか、代理店としての登録が許可されていません。管理者にお問い合わせください。');
+      }
+    } catch (err) {
+      setError('通信エラーが発生しました。');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCompleteRegistration = (e: React.FormEvent) => {
+  const handleCompleteRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
     
     if (password !== confirmPassword) {
       setError('パスワードが一致しません。');
+      setLoading(false);
       return;
     }
     
-    if (password.length < 4) {
-      setError('パスワードは4文字以上で設定してください。');
+    if (password.length < 6) {
+      setError('パスワードは6文字以上で設定してください。');
+      setLoading(false);
       return;
     }
 
-    if (targetUser) {
-      db.completeRegistration(targetUser.id, password);
-      alert('登録が完了しました。ログインしてください。');
-      navigate('/login');
+    try {
+      if (targetUser) {
+        await db.completeRegistration(targetUser.id, password);
+        alert('登録が完了しました。ログインしてください。');
+        navigate('/login');
+      }
+    } catch (err) {
+      setError('登録中にエラーが発生しました。');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,8 +104,8 @@ const RegistrationPage = () => {
                 </div>
               )}
               
-              <Button type="submit" style={{ width: '100%', padding: '16px' }}>
-                IDを認証する <i className="fa-solid fa-shield-check" style={{ marginLeft: '8px' }}></i>
+              <Button type="submit" disabled={loading} style={{ width: '100%', padding: '16px' }}>
+                {loading ? '認証中...' : 'IDを認証する'} <i className="fa-solid fa-shield-check" style={{ marginLeft: '8px' }}></i>
               </Button>
 
               <div style={{ textAlign: 'center', marginTop: '24px' }}>
@@ -130,12 +147,12 @@ const RegistrationPage = () => {
                 </div>
               )}
               
-              <Button type="submit" style={{ width: '100%', padding: '16px' }}>
-                登録を完了する <i className="fa-solid fa-check-circle" style={{ marginLeft: '8px' }}></i>
+              <Button type="submit" disabled={loading} style={{ width: '100%', padding: '16px' }}>
+                {loading ? '登録中...' : '登録を完了する'} <i className="fa-solid fa-check-circle" style={{ marginLeft: '8px' }}></i>
               </Button>
 
               <div style={{ textAlign: 'center', marginTop: '24px' }}>
-                <button type="button" onClick={() => setStep(1)} style={{ background: 'none', border: 'none', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-sub)', cursor: 'pointer' }}>
+                <button type="button" onClick={() => !loading && setStep(1)} style={{ background: 'none', border: 'none', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-sub)', cursor: loading ? 'default' : 'pointer' }}>
                   ID入力に戻る
                 </button>
               </div>

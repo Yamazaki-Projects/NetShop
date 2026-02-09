@@ -1,250 +1,273 @@
 
 import { 
-  User, Case, CaseStatus, AuditLog, UserRole, UserStatus, TaskStatus, MallOpeningStatus, CaseDocument, AgencyApplicationStatus
+  User, Case, CaseStatus, AuditLog, UserRole, UserStatus, TaskStatus, MallOpeningStatus, AgencyApplicationStatus
 } from '../types';
-import { mockUsers, mockCases, mockAuditLogs } from './mockData';
+import { supabase } from './supabaseClient';
 
 class DBService {
-  private users: User[] = [...mockUsers];
-  private cases: Case[] = [...mockCases];
-  private auditLogs: AuditLog[] = [...mockAuditLogs];
+  /**
+   * ログイン処理 (Supabase Auth & Profile Fetch)
+   */
+  async login(email: string, pass: string): Promise<User | null> {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password: pass,
+    });
 
-  login(loginId: string, pass: string): User | undefined {
-    const user = this.users.find(u => u.loginId === loginId);
-    if (!user || user.password !== pass) return undefined;
+    if (authError || !authData.user) return null;
 
-    if (user.role === UserRole.ADMIN) return user;
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
 
-    if (user.status === UserStatus.CUSTOMER && user.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
-      user.status = UserStatus.AGENCY;
-      this.logAction(user, '初回ログイン完了: 代理店ステータス有効化', 'user', user.id, { previousStatus: UserStatus.CUSTOMER });
-      return user;
-    }
-
-    if (user.status === UserStatus.CUSTOMER) return undefined; 
-    return user;
+    if (profileError) return null;
+    return this.mapUser(profile);
   }
 
-  getUsers(): User[] { return [...this.users]; }
-  getUserById(id: string): User | undefined { return this.users.find(u => u.id === id); }
-  getUserByEmail(email: string): User | undefined { return this.users.find(u => u.email === email); }
-
-  // --- 管理者専用：ユーザーの報酬設定更新 ---
-  updateUserRewardConfig(userId: string, config: { manualRateOverride?: number, manualBaseAmountOverride?: number }, actor: User) {
-    if (actor.role !== UserRole.ADMIN) return false;
-    const userIndex = this.users.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      this.users[userIndex] = { ...this.users[userIndex], ...config };
-      this.logAction(actor, `代理店報酬設定の個別更新: ${this.users[userIndex].name}`, 'user', userId, config);
-      return true;
-    }
-    return false;
+  /**
+   * ユーザー一覧取得
+   */
+  async getUsers(): Promise<User[]> {
+    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map(u => this.mapUser(u));
   }
 
-  calculateRate(userId: string): number {
-    const user = this.users.find(u => u.id === userId);
-    if (!user) return 0.3;
-    // 管理者による個別設定が最優先
-    if (user.manualRateOverride !== undefined) return user.manualRateOverride;
+  /**
+   * メールアドレスからユーザーを取得する
+   */
+  async getUserByEmail(email: string): Promise<User | null> {
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
+    if (error) return null;
+    return this.mapUser(data);
+  }
+
+  /**
+   * 案件一覧取得
+   */
+  async getCases(user: User): Promise<Case[]> {
+    let query = supabase.from('cases').select('*');
+    if (user.role !== UserRole.ADMIN) {
+      query = query.eq('referrer_id', user.id);
+    }
+    const { data, error } = await query.order('updated_at', { ascending: false });
+    if (error) return [];
+    return data.map(c => this.mapCase(c));
+  }
+
+  async getAllCases(): Promise<Case[]> {
+    const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
+    return (data || []).map(c => this.mapCase(c));
+  }
+
+  async getCaseById(id: string): Promise<Case | null> {
+    const { data, error } = await supabase.from('cases').select('*').eq('id', id).single();
+    if (error) return null;
+    return this.mapCase(data);
+  }
+
+  async createCase(newCaseData: Partial<Case>, actor: User): Promise<Case | null> {
+    const rate = await this.calculateRate(actor.id);
+    const baseAmount = actor.manualBaseAmountOverride || 198000;
     
-    if (user.status === UserStatus.CUSTOMER) return 0;
-    const count = this.getApprovedCount(userId);
+    const dbPayload = {
+      agency_id: actor.id,
+      agency_name: actor.name,
+      referrer_id: actor.id,
+      status: CaseStatus.DRAFT,
+      platform: newCaseData.platform,
+      customer_type: newCaseData.customerType,
+      company_name: newCaseData.companyName,
+      company_name_kana: newCaseData.companyNameKana,
+      representative_name: newCaseData.representativeName,
+      representative_name_kana: newCaseData.representativeNameKana,
+      corporate_number: newCaseData.corporateNumber,
+      established_date: newCaseData.establishedDate,
+      zip_code: newCaseData.zipCode,
+      address: newCaseData.address,
+      rep_name: newCaseData.repName,
+      rep_name_kana: newCaseData.repNameKana,
+      rep_birth_date: newCaseData.repBirthDate,
+      rep_zip_code: newCaseData.repZipCode,
+      rep_address: newCaseData.repAddress,
+      phone: newCaseData.phone,
+      email: newCaseData.email,
+      base_amount: baseAmount,
+      applied_rate: rate,
+      mall_progress: { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
+      tasks: [
+        { id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO },
+        { id: 't2', title: '口座情報の登録', status: TaskStatus.TODO },
+      ]
+    };
+
+    const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
+    if (error) return null;
+    await this.logAction(actor, '案件作成', 'case', data.id, { baseAmount });
+    return this.mapCase(data);
+  }
+
+  async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
+    // スネークケースへのマッピングが必要な場合は適宜変換
+    const { data, error } = await supabase.from('cases').update(updates).eq('id', id).select().single();
+    if (error) return null;
+    await this.logAction(actor, '案件更新', 'case', id, updates);
+    return this.mapCase(data);
+  }
+
+  async getApprovedCount(userId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('cases')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', userId)
+      .eq('status', CaseStatus.APPROVED);
+    return count || 0;
+  }
+
+  async calculateRate(userId: string): Promise<number> {
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!user) return 0.3;
+    if (user.manual_rate_override !== null && user.manual_rate_override !== undefined) return user.manual_rate_override;
+    const count = await this.getApprovedCount(userId);
     if (count >= 11) return 0.50;
     if (count >= 2) return 0.40;
     return 0.30;
   }
 
-  getApprovedCount(userId: string): number {
-    return this.cases.filter(c => c.referrerId === userId && c.status === CaseStatus.APPROVED).length;
+  async getTeamCases(user: User): Promise<Case[]> {
+    const downlineIds = await this.getDownlineUserIds(user.id);
+    if (downlineIds.length === 0) return [];
+    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', downlineIds);
+    if (error) return [];
+    return data.map(c => this.mapCase(c));
   }
 
-  getCases(user: User): Case[] { return this.cases.filter(c => c.referrerId === user.id); }
-  getAllCases(): Case[] { return [...this.cases]; }
-
-  getCaseById(id: string): Case | undefined { return this.cases.find(c => c.id === id); }
-
-  createCase(newCaseData: Omit<Case, 'id' | 'createdAt' | 'updatedAt' | 'tasks' | 'documents' | 'reviews' | 'baseAmount' | 'appliedRate' | 'isManualAdjustment'>, actor: User) {
-    let targetUser = this.getUserByEmail(newCaseData.email);
-    const actorUser = this.getUserById(actor.id);
-    
-    if (!targetUser) {
-      targetUser = {
-        id: `U-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-        loginId: this.getNextPartnerId(), 
-        name: newCaseData.companyName || newCaseData.customerName,
-        email: newCaseData.email,
-        role: UserRole.AGENCY, 
-        status: UserStatus.CUSTOMER,
-        agencyApplicationStatus: AgencyApplicationStatus.NONE,
-        referrerId: actor.id,
-        createdAt: new Date().toISOString()
-      };
-      this.users.push(targetUser);
+  async getDownlineUserIds(userId: string): Promise<string[]> {
+    const { data } = await supabase.from('users').select('id').eq('referrer_id', userId);
+    if (!data) return [];
+    let ids = data.map(u => u.id);
+    for (const id of data.map(u => u.id)) {
+      const subIds = await this.getDownlineUserIds(id);
+      ids = [...ids, ...subIds];
     }
-
-    // 代理店に設定されたデフォルト案件価格を使用。設定がなければ198,000円
-    const initialBaseAmount = actorUser?.manualBaseAmountOverride || 198000;
-    const currentRate = this.calculateRate(actor.id);
-
-    const caseObj: Case = {
-      ...newCaseData,
-      id: `C-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-      referrerId: actor.id, 
-      baseAmount: initialBaseAmount,
-      appliedRate: currentRate,
-      isManualAdjustment: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      tasks: [
-        { id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO },
-        { id: 't2', title: '口座情報の登録', status: TaskStatus.TODO },
-      ],
-      documents: [],
-      reviews: [],
-      rakutenInfo: {},
-      mallProgress: {
-        rakuten: MallOpeningStatus.APPLYING,
-        yahoo: MallOpeningStatus.APPLYING,
-        aupay: MallOpeningStatus.APPLYING
-      },
-      subline: { status: 'none' },
-      emailJp: { status: 'none' }
-    };
-    this.cases.unshift(caseObj);
-    this.logAction(actor, '案件作成', 'case', caseObj.id, { baseAmount: initialBaseAmount, rate: currentRate });
-    return caseObj;
+    return Array.from(new Set(ids));
   }
 
-  updateCase(id: string, updates: Partial<Case>, actor: User) {
-    const index = this.cases.findIndex(c => c.id === id);
-    if (index !== -1) {
-      // 財務情報の更新は管理者のみ許可
-      if ((updates.baseAmount !== undefined || updates.appliedRate !== undefined) && actor.role !== UserRole.ADMIN) {
-        delete updates.baseAmount;
-        delete updates.appliedRate;
-      }
-      
-      const updatedCase = { ...this.cases[index], ...updates, updatedAt: new Date().toISOString() };
-      this.cases[index] = updatedCase;
-      this.logAction(actor, '案件更新', 'case', id, updates);
-      return this.cases[index];
-    }
-  }
-
-  private getNextPartnerId(): string {
-    const partnerUsers = this.users.filter(u => u.loginId.startsWith('PA'));
-    if (partnerUsers.length === 0) return 'PA0001';
-    const ids = partnerUsers.map(u => parseInt(u.loginId.replace('PA', ''), 10)).filter(n => !isNaN(n));
-    return `PA${String(Math.max(...ids) + 1).padStart(4, '0')}`;
-  }
-
-  private logAction(actor: User, action: string, targetType: AuditLog['targetType'], targetId: string, metadata: any) {
-    const log: AuditLog = {
-      id: `LOG-${Date.now()}`,
-      actorUserId: actor.id,
-      actorName: actor.name,
+  async logAction(actor: User, action: string, targetType: string, targetId: string, metadata: any) {
+    await supabase.from('audit_logs').insert([{
+      actor_user_id: actor.id,
+      actor_name: actor.name,
       action,
-      targetType,
-      targetId,
-      metadata,
-      createdAt: new Date().toISOString()
+      target_type: targetType,
+      target_id: targetId,
+      metadata
+    }]);
+  }
+
+  private mapUser(u: any): User {
+    return {
+      id: u.id,
+      loginId: u.login_id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      status: u.status,
+      referrerId: u.referrer_id,
+      agencyApplicationStatus: u.agency_application_status,
+      manualRateOverride: u.manual_rate_override,
+      manualBaseAmountOverride: u.manual_base_amount_override,
+      createdAt: u.created_at
     };
-    this.auditLogs.push(log);
   }
 
-  // 顧客の削除申請フラグを設定する
-  requestUserDeletion(userId: string, actor: User): boolean {
-    const userIndex = this.users.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      this.users[userIndex].isDeletionPending = true;
-      this.logAction(actor, `顧客削除申請: ${this.users[userIndex].name}`, 'user', userId, {});
-      return true;
-    }
-    return false;
+  private mapCase(c: any): Case {
+    return {
+      id: c.id,
+      agencyId: c.agency_id,
+      agencyName: c.agency_name,
+      referrerId: c.referrer_id,
+      status: c.status,
+      platform: c.platform,
+      customerType: c.customer_type,
+      companyName: c.company_name,
+      companyNameKana: c.company_name_kana,
+      representativeName: c.representative_name,
+      representativeNameKana: c.representative_name_kana,
+      corporateNumber: c.corporate_number,
+      establishedDate: c.established_date,
+      zipCode: c.zip_code,
+      address: c.address,
+      repName: c.rep_name,
+      repNameKana: c.rep_name_kana,
+      repBirthDate: c.rep_birth_date,
+      repZipCode: c.rep_zip_code,
+      repAddress: c.rep_address,
+      phone: c.phone,
+      email: c.email,
+      customerName: c.rep_name || c.company_name,
+      baseAmount: c.base_amount,
+      appliedRate: c.applied_rate,
+      isManualAdjustment: c.is_manual_adjustment,
+      manualAgencyAmount: c.manual_agency_amount,
+      tasks: c.tasks || [],
+      mallProgress: c.mall_progress || {},
+      subline: c.subline || { status: 'none' },
+      emailJp: c.email_jp || { status: 'none' },
+      rakutenInfo: c.rakuten_info || {},
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      documents: [],
+      reviews: []
+    };
   }
 
-  // 顧客の削除申請を却下しフラグを解除する
-  cancelUserDeletion(userId: string, actor: User): boolean {
-    const userIndex = this.users.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      this.users[userIndex].isDeletionPending = false;
-      this.logAction(actor, `顧客削除申請却下: ${this.users[userIndex].name}`, 'user', userId, {});
-      return true;
-    }
-    return false;
+  async approveAgency(userId: string, actor: User) {
+    await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.APPROVED }).eq('id', userId);
+    await this.logAction(actor, '代理店昇格承認', 'user', userId, {});
   }
 
-  // 顧客を物理削除し、関連案件も消去する
-  confirmUserDeletion(userId: string, actor: User): boolean {
-    const userIndex = this.users.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      const targetUser = this.users[userIndex];
-      this.users.splice(userIndex, 1);
-      this.cases = this.cases.filter(c => c.email !== targetUser.email);
-      this.logAction(actor, `顧客削除完了: ${targetUser.name}`, 'user', userId, {});
-      return true;
-    }
-    return false;
+  async applyForAgency(userId: string, actor: User) {
+    await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', userId);
+    await this.logAction(actor, '代理店昇格申請', 'user', userId, {});
   }
 
-  // 代理店昇格の申請を行う
-  applyForAgency(customerUserId: string, actor: User): boolean {
-    const userIndex = this.users.findIndex(u => u.id === customerUserId);
-    if (userIndex !== -1) {
-      this.users[userIndex].agencyApplicationStatus = AgencyApplicationStatus.PENDING;
-      this.logAction(actor, `代理店昇格申請: ${this.users[userIndex].name}`, 'user', customerUserId, {});
-      return true;
-    }
-    return false;
+  /**
+   * 認証用IDの有効性チェック
+   */
+  async verifyRegistrationId(loginId: string): Promise<User | null> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('login_id', loginId)
+      .eq('agency_application_status', AgencyApplicationStatus.APPROVED)
+      .eq('status', UserStatus.CUSTOMER)
+      .single();
+    if (error) return null;
+    return this.mapUser(data);
   }
 
-  // 代理店昇格を承認する
-  approveAgency(customerUserId: string, actor: User): boolean {
-    const userIndex = this.users.findIndex(u => u.id === customerUserId);
-    if (userIndex !== -1) {
-      this.users[userIndex].agencyApplicationStatus = AgencyApplicationStatus.APPROVED;
-      this.logAction(actor, `代理店昇格承認: ${this.users[userIndex].name}`, 'user', customerUserId, {});
-      return true;
-    }
-    return false;
+  /**
+   * パスワード設定と代理店ステータスへの更新
+   */
+  async completeRegistration(userId: string, password: string): Promise<void> {
+    await supabase.from('users').update({ 
+      status: UserStatus.AGENCY,
+      password: password
+    }).eq('id', userId);
   }
 
-  // 登録用ID（PAXXXX）の有効性を検証する
-  verifyRegistrationId(loginId: string): User | null {
-    const user = this.users.find(u => 
-      u.loginId === loginId && 
-      u.status === UserStatus.CUSTOMER && 
-      u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED
-    );
-    return user || null;
-  }
-
-  // パスワード設定と代理店としての登録を完了する
-  completeRegistration(userId: string, password: string): boolean {
-    const userIndex = this.users.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      this.users[userIndex].password = password;
-      this.users[userIndex].status = UserStatus.AGENCY;
-      this.logAction(this.users[userIndex], '本登録完了', 'user', userId, {});
-      return true;
-    }
-    return false;
-  }
-
-  // 指定ユーザーの全階層下位組織の案件を取得する
-  getTeamCases(user: User): Case[] {
-    const downlineIds = this.getDownlineUserIds(user.id);
-    return this.cases.filter(c => downlineIds.includes(c.referrerId || ''));
-  }
-
-  // 下位組織に属する全ユーザーIDを再帰的に取得する
-  getDownlineUserIds(userId: string): string[] {
-    const directDownline = this.users.filter(u => u.referrerId === userId).map(u => u.id);
-    let allDownline = [...directDownline];
-    for (const id of directDownline) {
-      allDownline = [...allDownline, ...this.getDownlineUserIds(id)];
-    }
-    return Array.from(new Set(allDownline));
+  /**
+   * 代理店の報酬設定変更
+   */
+  async updateUserRewardConfig(userId: string, config: any, actor: User) {
+    const updates = {
+      manual_base_amount_override: config.manualBaseAmountOverride,
+      manual_rate_override: config.manualRateOverride
+    };
+    await supabase.from('users').update(updates).eq('id', userId);
+    await this.logAction(actor, '報酬設定変更', 'user', userId, config);
   }
 }
 

@@ -1,131 +1,125 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { User, UserStatus, UserRole } from '../types';
-import { Badge, Button } from '../components/UI';
+import { User, UserStatus, UserRole, Case } from '../types';
+import { Badge, Button, Card } from '../components/UI';
 
 // パートナー（User）を表示するためのコンポーネント
-const TreeNode = ({ node, level, isAdmin, currentUser }: { node: User; level: number; isAdmin: boolean; currentUser: User; key?: React.Key }) => {
+const TreeNode = ({ node, level, isAdmin, currentUser, allUsers, allCases }: { 
+  node: User; 
+  level: number; 
+  isAdmin: boolean; 
+  currentUser: User; 
+  allUsers: User[]; 
+  allCases: Case[];
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [stats, setStats] = useState<{ count: number; rate: number } | null>(null);
   const navigate = useNavigate();
   
-  // このユーザーが「直紹介」したユーザー（代理店 or 顧客）をすべて抽出
-  const subUsers = db.getUsers().filter(u => u.referrerId === node.id);
-  
-  const approvedCount = db.getApprovedCount(node.id);
-  const currentRate = db.calculateRate(node.id);
+  const children = useMemo(() => 
+    allUsers.filter(u => u.referrerId === node.id),
+    [allUsers, node.id]
+  );
 
-  // このユーザーに関連する案件を検索
-  const associatedCase = db.getAllCases().find(c => c.email === node.email);
+  useEffect(() => {
+    const loadStats = async () => {
+      const [count, rate] = await Promise.all([
+        db.getApprovedCount(node.id),
+        db.calculateRate(node.id)
+      ]);
+      setStats({ count, rate });
+    };
+    loadStats();
+  }, [node.id]);
 
-  const hasSubItems = subUsers.length > 0;
-
-  const handleNodeClick = (e: React.MouseEvent) => {
-    // 展開ボタン（chevron）のクリック時は遷移させない
-    if ((e.target as HTMLElement).closest('.chevron-btn')) return;
-    
-    if (associatedCase) {
-      navigate(`/cases/${associatedCase.id}`);
-    }
-  };
+  const isSelf = currentUser.id === node.id;
 
   return (
-    <div style={{ marginLeft: level === 0 ? 0 : '32px', marginBottom: '12px' }}>
-      <div 
-        onClick={handleNodeClick}
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '12px', 
-          padding: '12px 16px', 
-          background: 'var(--bg-card)', 
-          borderRadius: '12px',
-          border: '1px solid var(--border)',
-          boxShadow: level === 0 ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          position: 'relative',
-          cursor: associatedCase ? 'pointer' : 'default'
-        }}
-        onMouseOver={(e) => {
-          if (associatedCase) {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(0,0,0,0.1)';
-            e.currentTarget.style.borderColor = 'var(--primary)';
-          }
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = level === 0 ? 'var(--shadow-md)' : 'var(--shadow-sm)';
-          e.currentTarget.style.borderColor = 'var(--border)';
-        }}
-      >
+    <div style={{ marginLeft: level === 0 ? 0 : '32px', marginBottom: '12px', borderLeft: level === 0 ? 'none' : '2px solid var(--border)', paddingLeft: level === 0 ? 0 : '24px' }}>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '16px', 
+        padding: '16px 20px', 
+        background: isSelf ? 'rgba(79, 70, 229, 0.05)' : 'var(--bg-card)', 
+        borderRadius: '16px',
+        border: isSelf ? '2px solid var(--primary)' : '1px solid var(--border)',
+        boxShadow: 'var(--shadow-sm)',
+        transition: 'all 0.2s'
+      }}>
         <div 
-          className="chevron-btn"
-          onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} 
-          style={{ cursor: hasSubItems ? 'pointer' : 'default', width: '20px', textAlign: 'center', color: 'var(--text-sub)', zIndex: 10 }}
+          onClick={() => children.length > 0 && setIsExpanded(!isExpanded)}
+          style={{ 
+            width: '24px', 
+            height: '24px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            cursor: children.length > 0 ? 'pointer' : 'default',
+            color: children.length > 0 ? 'var(--primary)' : 'var(--border)'
+          }}
         >
-          {hasSubItems && (
-            <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ fontSize: '0.7rem' }}></i>
+          {children.length > 0 && (
+            <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ fontSize: '0.8rem' }}></i>
           )}
         </div>
-        
+
         <div style={{ 
-          width: '36px', 
-          height: '36px', 
-          borderRadius: '50%', 
-          background: node.role === UserRole.ADMIN ? 'var(--grad-primary)' : (node.status === UserStatus.AGENCY ? 'var(--primary)' : '#e2e8f0'), 
-          color: node.status === UserStatus.AGENCY || node.role === UserRole.ADMIN ? 'white' : '#64748b', 
+          width: '40px', 
+          height: '40px', 
+          borderRadius: '10px', 
+          background: node.role === UserRole.ADMIN ? 'var(--grad-primary)' : 'linear-gradient(45deg, #1e293b, #334155)',
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          fontSize: '0.9rem',
-          boxShadow: node.role === UserRole.ADMIN ? '0 4px 10px rgba(79, 70, 229, 0.3)' : 'none'
+          color: 'white'
         }}>
-          <i className={`fa-solid ${node.role === UserRole.ADMIN ? 'fa-shield-halved' : 'fa-user'}`}></i>
+          <i className={`fa-solid ${node.role === UserRole.ADMIN ? 'fa-crown' : 'fa-user'}`}></i>
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>{node.name}</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>({node.loginId})</span>
-            {node.status === UserStatus.AGENCY ? (
-              <Badge color="var(--primary)">代理店</Badge>
-            ) : (
-              <Badge color="#94a3b8">顧客</Badge>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontWeight: 800, fontSize: '1rem' }}>{node.name}</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)' }}>{node.loginId}</span>
+            {isSelf && <Badge color="var(--primary)">あなた</Badge>}
+            {node.status === UserStatus.CUSTOMER && <Badge color="#94a3b8">顧客</Badge>}
+          </div>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+            {stats && (
+              <>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)' }}>
+                  承認案件: <span style={{ color: 'var(--accent)' }}>{stats.count}件</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)' }}>
+                  報酬率: <span style={{ color: 'var(--primary)' }}>{Math.round(stats.rate * 100)}%</span>
+                </div>
+              </>
             )}
-            {node.isDeletionPending && (
-               <Badge color="#ef4444">削除申請中</Badge>
-            )}
-            {node.id === currentUser.id && level === 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--accent)' }}>(自分)</span>}
           </div>
         </div>
 
-        {(isAdmin || currentUser.id === node.id) && node.role !== UserRole.ADMIN && node.status === UserStatus.AGENCY && (
-          <div style={{ display: 'flex', gap: '20px', padding: '0 12px', borderLeft: '1px solid var(--border)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '0.6rem', color: 'var(--text-sub)', fontWeight: 800 }}>承認案件</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 900 }}>{approvedCount}</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '0.6rem', color: 'var(--text-sub)', fontWeight: 800 }}>報酬率</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--primary)' }}>{Math.round(currentRate * 100)}%</div>
-            </div>
-          </div>
-        )}
-        
-        {associatedCase && (
-          <div style={{ paddingLeft: '12px', color: 'var(--primary)', opacity: 0.5 }}>
-            <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '0.75rem' }}></i>
-          </div>
+        {isAdmin && (
+          <Button variant="ghost" onClick={() => navigate(`/agencies`)} style={{ padding: '8px 12px', fontSize: '0.75rem' }}>
+            詳細
+          </Button>
         )}
       </div>
 
-      {isExpanded && (
-        <div style={{ marginTop: '8px' }}>
-          {subUsers.map(child => (
-            <TreeNode key={child.id} node={child} level={level + 1} isAdmin={isAdmin} currentUser={currentUser} />
+      {isExpanded && children.length > 0 && (
+        <div style={{ marginTop: '12px' }}>
+          {children.map(child => (
+            <TreeNode 
+              key={child.id} 
+              node={child} 
+              level={level + 1} 
+              isAdmin={isAdmin} 
+              currentUser={currentUser}
+              allUsers={allUsers}
+              allCases={allCases}
+            />
           ))}
         </div>
       )}
@@ -135,52 +129,54 @@ const TreeNode = ({ node, level, isAdmin, currentUser }: { node: User; level: nu
 
 const TierTreePage = () => {
   const { user } = useAppContext();
-  
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allCases, setAllCases] = useState<Case[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      const [u, c] = await Promise.all([
+        db.getUsers(),
+        db.getAllCases()
+      ]);
+      setAllUsers(u);
+      setAllCases(c);
+      setLoading(false);
+    };
+    loadData();
+  }, []);
+
+  // 表示の起点となるユーザー（管理者の場合は最上位、代理店の場合は自分）
   const rootUsers = useMemo(() => {
     if (!user) return [];
-    return [user];
-  }, [user]);
+    if (user.role === UserRole.ADMIN) {
+      return allUsers.filter(u => !u.referrerId || u.role === UserRole.ADMIN);
+    }
+    return allUsers.filter(u => u.id === user.id);
+  }, [allUsers, user]);
 
-  const LegendItem = ({ icon, label, color }: { icon: string, label: string, color: string }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 700 }}>
-      <div style={{ 
-        width: '24px', height: '24px', borderRadius: '6px', background: color, color: color === '#e2e8f0' ? '#64748b' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center'
-      }}>
-        <i className={`fa-solid ${icon}`}></i>
-      </div>
-      <span style={{ color: 'var(--text-sub)' }}>{label}</span>
-    </div>
-  );
+  if (loading || !user) {
+    return <div style={{ padding: '48px', textAlign: 'center' }}>読み込み中...</div>;
+  }
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }} className="animate-fade-in">
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '40px', textAlign: 'left' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>ティアツリー</h1>
-        <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>紹介ネットワークを視覚化します。各ノードをクリックすると、その顧客の案件詳細を確認できます。</p>
+        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>ティアツリー <span style={{ color: 'var(--accent)' }}>.</span></h1>
+        <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>代理店パートナーの組織図と報酬ランクを可視化します。</p>
       </header>
 
-      {/* Legend / Legend Bar */}
-      <div style={{ 
-        background: 'var(--bg-card)', padding: '16px 24px', borderRadius: '16px', border: '1px solid var(--border)', marginBottom: '32px',
-        display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center'
-      }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-sub)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>凡例:</div>
-        <LegendItem icon="fa-user" label="代理店 (パートナー)" color="var(--primary)" />
-        <LegendItem icon="fa-user" label="獲得した顧客" color="#e2e8f0" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: 700, marginLeft: 'auto' }}>
-           <i className="fa-solid fa-arrow-up-right-from-square" style={{ color: 'var(--primary)' }}></i>
-           <span style={{ color: 'var(--text-sub)' }}>案件詳細へ移動可能</span>
-        </div>
-      </div>
-
-      <div style={{ padding: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {rootUsers.map(root => (
           <TreeNode 
             key={root.id} 
             node={root} 
             level={0} 
-            isAdmin={user?.role === UserRole.ADMIN} 
-            currentUser={user!} 
+            isAdmin={user.role === UserRole.ADMIN} 
+            currentUser={user}
+            allUsers={allUsers}
+            allCases={allCases}
           />
         ))}
       </div>

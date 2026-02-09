@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
 import { User, UserRole, UserStatus } from '../types';
@@ -7,8 +7,9 @@ import { Card, Input, Button, Badge } from '../components/UI';
 
 const AgencyListPage = () => {
   const { user: currentUser } = useAppContext();
-  const allUsers = useMemo(() => db.getUsers(), []);
-  const agencies = useMemo(() => allUsers.filter(u => u.status === UserStatus.AGENCY && u.role !== UserRole.ADMIN), [allUsers]);
+  const [agencies, setAgencies] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statsMap, setStatsMap] = useState<Record<string, { count: number; rate: number }>>({});
   
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -16,24 +17,49 @@ const AgencyListPage = () => {
     manualRateOverride: 0.3
   });
 
+  const loadAgencies = async () => {
+    setLoading(true);
+    const allUsers = await db.getUsers();
+    const filteredAgencies = allUsers.filter(u => u.status === UserStatus.AGENCY && u.role !== UserRole.ADMIN);
+    setAgencies(filteredAgencies);
+
+    // 各代理店の統計情報を並列取得
+    const stats: Record<string, { count: number; rate: number }> = {};
+    await Promise.all(filteredAgencies.map(async (a) => {
+      const [count, rate] = await Promise.all([
+        db.getApprovedCount(a.id),
+        db.calculateRate(a.id)
+      ]);
+      stats[a.id] = { count, rate };
+    }));
+    setStatsMap(stats);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === UserRole.ADMIN) {
+      loadAgencies();
+    }
+  }, [currentUser]);
+
   if (currentUser?.role !== UserRole.ADMIN) {
     return <div style={{ padding: '48px', textAlign: 'center' }}>このページを表示する権限がありません。</div>;
   }
 
   const handleEditClick = (agency: User) => {
+    const stat = statsMap[agency.id];
     setEditingUserId(agency.id);
     setEditForm({
       manualBaseAmountOverride: agency.manualBaseAmountOverride || 198000,
-      manualRateOverride: agency.manualRateOverride !== undefined ? agency.manualRateOverride : db.calculateRate(agency.id)
+      manualRateOverride: agency.manualRateOverride !== undefined ? agency.manualRateOverride : (stat?.rate || 0.3)
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editingUserId && currentUser) {
-      db.updateUserRewardConfig(editingUserId, editForm, currentUser);
+      await db.updateUserRewardConfig(editingUserId, editForm, currentUser);
       setEditingUserId(null);
-      // 再描画のためにページをリロード（あるいはstate管理を強化）
-      window.location.reload();
+      await loadAgencies(); // リロード
     }
   };
 
@@ -45,44 +71,51 @@ const AgencyListPage = () => {
       </header>
 
       <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th className="align-left">代理店名 / ID</th>
-                <th className="align-left">メールアドレス</th>
-                <th className="align-center">承認案件数</th>
-                <th className="align-right">報酬設定</th>
-                <th className="align-right">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agencies.map(agency => (
-                <tr key={agency.id}>
-                  <td className="align-left">
-                    <div style={{ fontWeight: 800 }}>{agency.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{agency.loginId}</div>
-                  </td>
-                  <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>
-                  <td className="align-center">
-                    <Badge color="var(--accent)">{db.getApprovedCount(agency.id)} 件</Badge>
-                  </td>
-                  <td className="align-right">
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                      ¥{(agency.manualBaseAmountOverride || 198000).toLocaleString()} / {Math.round((agency.manualRateOverride !== undefined ? agency.manualRateOverride : db.calculateRate(agency.id)) * 100)}%
-                    </div>
-                    {agency.manualRateOverride !== undefined && <div style={{ fontSize: '0.65rem', color: 'var(--primary)', fontWeight: 800 }}>個別設定適用中</div>}
-                  </td>
-                  <td className="align-right">
-                    <Button variant="ghost" onClick={() => handleEditClick(agency)} style={{ border: '1px solid var(--border)', padding: '6px 12px', fontSize: '0.8rem' }}>
-                      設定変更
-                    </Button>
-                  </td>
+        {loading ? (
+          <div style={{ padding: '48px', textAlign: 'center' }}>読み込み中...</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th className="align-left">代理店名 / ID</th>
+                  <th className="align-left">メールアドレス</th>
+                  <th className="align-center">承認案件数</th>
+                  <th className="align-right">報酬設定</th>
+                  <th className="align-right">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {agencies.map(agency => {
+                  const stat = statsMap[agency.id];
+                  return (
+                    <tr key={agency.id}>
+                      <td className="align-left">
+                        <div style={{ fontWeight: 800 }}>{agency.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{agency.loginId}</div>
+                      </td>
+                      <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>
+                      <td className="align-center">
+                        <Badge color="var(--accent)">{stat?.count || 0} 件</Badge>
+                      </td>
+                      <td className="align-right">
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                          ¥{(agency.manualBaseAmountOverride || 198000).toLocaleString()} / {Math.round((agency.manualRateOverride !== undefined ? agency.manualRateOverride : (stat?.rate || 0)) * 100)}%
+                        </div>
+                        {agency.manualRateOverride !== undefined && <div style={{ fontSize: '0.65rem', color: 'var(--primary)', fontWeight: 800 }}>個別設定適用中</div>}
+                      </td>
+                      <td className="align-right">
+                        <Button variant="ghost" onClick={() => handleEditClick(agency)} style={{ border: '1px solid var(--border)', padding: '6px 12px', fontSize: '0.8rem' }}>
+                          設定変更
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {editingUserId && (
