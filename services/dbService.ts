@@ -6,24 +6,38 @@ import { supabase } from './supabaseClient';
 
 class DBService {
   /**
-   * ログイン処理 (Supabase Auth & Profile Fetch)
+   * ログイン処理
+   * 1. Supabase Auth での認証を試行 (emailの場合)
+   * 2. 失敗した場合、usersテーブルの login_id と password を直接照合 (フォールバック)
    */
-  async login(email: string, pass: string): Promise<User | null> {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password: pass,
-    });
+  async login(identity: string, pass: string): Promise<User | null> {
+    // 1. Supabase Auth 試行 (メールアドレス形式の場合)
+    if (identity.includes('@')) {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: identity,
+        password: pass,
+      });
 
-    if (authError || !authData.user) return null;
+      if (!authError && authData.user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        if (profile) return this.mapUser(profile);
+      }
+    }
 
-    const { data: profile, error: profileError } = await supabase
+    // 2. フォールバック: usersテーブルを直接検索 (login_id または email)
+    const { data: userRecord, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('id', authData.user.id)
+      .or(`login_id.eq.${identity},email.eq.${identity}`)
+      .eq('password', pass) // 注意: 開発/移行用。本番ではハッシュ化が推奨されます
       .single();
 
-    if (profileError) return null;
-    return this.mapUser(profile);
+    if (userError || !userRecord) return null;
+    return this.mapUser(userRecord);
   }
 
   /**
