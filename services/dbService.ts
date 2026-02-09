@@ -32,7 +32,7 @@ class DBService {
   async getUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     if (error) return [];
-    return data.map(u => this.mapUser(u));
+    return (data as any[]).map((u: any) => this.mapUser(u));
   }
 
   /**
@@ -54,12 +54,12 @@ class DBService {
     }
     const { data, error } = await query.order('updated_at', { ascending: false });
     if (error) return [];
-    return data.map(c => this.mapCase(c));
+    return (data as any[]).map((c: any) => this.mapCase(c));
   }
 
   async getAllCases(): Promise<Case[]> {
     const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
-    return (data || []).map(c => this.mapCase(c));
+    return ((data as any[]) || []).map((c: any) => this.mapCase(c));
   }
 
   async getCaseById(id: string): Promise<Case | null> {
@@ -110,7 +110,6 @@ class DBService {
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
-    // スネークケースへのマッピングが必要な場合は適宜変換
     const { data, error } = await supabase.from('cases').update(updates).eq('id', id).select().single();
     if (error) return null;
     await this.logAction(actor, '案件更新', 'case', id, updates);
@@ -141,14 +140,14 @@ class DBService {
     if (downlineIds.length === 0) return [];
     const { data, error } = await supabase.from('cases').select('*').in('referrer_id', downlineIds);
     if (error) return [];
-    return data.map(c => this.mapCase(c));
+    return (data as any[]).map((c: any) => this.mapCase(c));
   }
 
   async getDownlineUserIds(userId: string): Promise<string[]> {
     const { data } = await supabase.from('users').select('id').eq('referrer_id', userId);
     if (!data) return [];
-    let ids = data.map(u => u.id);
-    for (const id of data.map(u => u.id)) {
+    let ids = (data as any[]).map((u: any) => u.id);
+    for (const id of (data as any[]).map((u: any) => u.id)) {
       const subIds = await this.getDownlineUserIds(id);
       ids = [...ids, ...subIds];
     }
