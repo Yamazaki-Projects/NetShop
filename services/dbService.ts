@@ -18,8 +18,6 @@ class DBService {
   /**
    * 汎用的なデータ取得/実行ラッパー
    */
-  // Fix: Relaxed the type of supabaseOp to any to support PostgrestBuilder/PostgrestFilterBuilder 
-  // which are PromiseLike but don't strictly match the Promise<{data: any; error: any}> interface.
   private async execute<T>(
     supabaseOp: () => any,
     mockOp: () => T
@@ -60,7 +58,7 @@ class DBService {
       if (profileError) return null;
       return this.mapUser(profile);
     } catch (e) {
-      return this.login(loginId, pass); // 再試行（実際はConfigチェックでモックへ流れる）
+      return this.login(loginId, pass); 
     }
   }
 
@@ -79,7 +77,6 @@ class DBService {
   }
 
   async approveApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
-    // fetch('/api/...') を廃止し、DBを直接更新またはシミュレーション
     if (!isSupabaseConfigured) {
       const user = this.localUsers.find(u => u.loginId === customerId);
       if (user) {
@@ -138,13 +135,12 @@ class DBService {
       if (user) {
         user.status = UserStatus.AGENCY;
         user.role = UserRole.AGENCY;
-        (user as any).password = password; // デモ用
+        (user as any).password = password; 
         return { ok: true };
       }
       return { ok: false, reason: 'not_found' };
     }
 
-    // 本来はAuth APIの更新などが必要だが、ここではステータス更新のみシミュレート
     const { error } = await supabase
       .from('users')
       .update({ 
@@ -164,17 +160,14 @@ class DBService {
     ).then(res => (res as any[]).map(u => isSupabaseConfigured ? this.mapUser(u) : u));
   }
 
+  /**
+   * ユーザーの「直紹介案件」のみを取得します。
+   * 管理者の場合でも全件ではなく、自身の紹介案件に絞り込みます。
+   */
   async getCases(user: User): Promise<Case[]> {
     return this.execute(
-      () => {
-        let query = supabase.from('cases').select('*');
-        if (user.role !== UserRole.ADMIN) query = query.eq('referrer_id', user.id);
-        return query.order('updated_at', { ascending: false });
-      },
-      () => {
-        if (user.role === UserRole.ADMIN) return this.localCases;
-        return this.localCases.filter(c => c.referrerId === user.id);
-      }
+      () => supabase.from('cases').select('*').eq('referrer_id', user.id).order('updated_at', { ascending: false }),
+      () => this.localCases.filter(c => c.referrerId === user.id)
     ).then(res => (res as any[]).map(c => isSupabaseConfigured ? this.mapCase(c) : c));
   }
 
@@ -211,7 +204,7 @@ class DBService {
     };
 
     if (!isSupabaseConfigured) {
-      const mapped = this.mapCase(dbPayload); // モック時はスネークケースを変換して保持
+      const mapped = this.mapCase(dbPayload); 
       this.localCases.push(mapped);
       return mapped;
     }

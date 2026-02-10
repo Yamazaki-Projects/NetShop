@@ -3,11 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User } from '../types';
+import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User, UserRole } from '../types';
 import { Card, Input, Select, Button, Badge } from '../components/UI';
 
 type SortKey = 'customerName' | 'updatedAt' | 'agencyName' | 'rakuten' | 'yahoo' | 'aupay';
-type ListTab = 'mine' | 'team';
+type ListTab = 'mine' | 'team' | 'all';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
@@ -19,13 +19,13 @@ const CaseListPage = () => {
   
   const [myCases, setMyCases] = useState<Case[]>([]);
   const [teamCases, setTeamCases] = useState<Case[]>([]);
+  const [allCases, setAllCases] = useState<Case[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
-    // 法人情報
     companyName: '',
     companyNameKana: '',
     representativeName: '',
@@ -34,7 +34,6 @@ const CaseListPage = () => {
     establishedDate: '',
     zipCode: '',
     address: '',
-    // 代表者情報
     repName: '',
     repNameKana: '',
     repBirthDate: '',
@@ -49,20 +48,26 @@ const CaseListPage = () => {
     const loadData = async () => {
       if (!user) return;
       setLoading(true);
-      const [m, t, u] = await Promise.all([
+      const [m, t, u, a] = await Promise.all([
         db.getCases(user),
         db.getTeamCases(user),
-        db.getUsers()
+        db.getUsers(),
+        user.role === UserRole.ADMIN ? db.getAllCases() : Promise.resolve([])
       ]);
       setMyCases(m);
       setTeamCases(t);
       setAllUsers(u);
+      setAllCases(a);
       setLoading(false);
     };
     loadData();
   }, [user]);
 
-  const currentCases = activeTab === 'mine' ? myCases : teamCases;
+  const currentCases = useMemo(() => {
+    if (activeTab === 'mine') return myCases;
+    if (activeTab === 'team') return teamCases;
+    return allCases;
+  }, [activeTab, myCases, teamCases, allCases]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({
@@ -93,7 +98,7 @@ const CaseListPage = () => {
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [currentCases, search, platformFilter, sortConfig, activeTab]);
+  }, [currentCases, search, platformFilter, sortConfig]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +139,8 @@ const CaseListPage = () => {
     return <Badge color="#94a3b8">顧客</Badge>;
   };
 
+  const isAdmin = user?.role === UserRole.ADMIN;
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
@@ -149,12 +156,59 @@ const CaseListPage = () => {
       </header>
 
       <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
-        <button onClick={() => setActiveTab('mine')} style={{ padding: '12px 24px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 800, color: activeTab === 'mine' ? 'var(--primary)' : 'var(--text-sub)', borderBottom: activeTab === 'mine' ? '3px solid var(--primary)' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>
+        <button 
+          onClick={() => setActiveTab('mine')} 
+          style={{ 
+            padding: '12px 24px', 
+            border: 'none', 
+            background: 'none', 
+            cursor: 'pointer', 
+            fontSize: '0.95rem', 
+            fontWeight: 800, 
+            color: activeTab === 'mine' ? 'var(--primary)' : 'var(--text-sub)', 
+            borderBottom: activeTab === 'mine' ? '3px solid var(--primary)' : '3px solid transparent', 
+            transition: 'all 0.2s', 
+            marginBottom: '-2px' 
+          }}
+        >
           自分の案件 ({myCases.length})
         </button>
-        <button onClick={() => setActiveTab('team')} style={{ padding: '12px 24px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 800, color: activeTab === 'team' ? 'var(--accent)' : 'var(--text-sub)', borderBottom: activeTab === 'team' ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>
+        <button 
+          onClick={() => setActiveTab('team')} 
+          style={{ 
+            padding: '12px 24px', 
+            border: 'none', 
+            background: 'none', 
+            cursor: 'pointer', 
+            fontSize: '0.95rem', 
+            fontWeight: 800, 
+            color: activeTab === 'team' ? 'var(--accent)' : 'var(--text-sub)', 
+            borderBottom: activeTab === 'team' ? '3px solid var(--accent)' : '3px solid transparent', 
+            transition: 'all 0.2s', 
+            marginBottom: '-2px' 
+          }}
+        >
           チームの案件 ({teamCases.length})
         </button>
+        {isAdmin && (
+          <button 
+            onClick={() => setActiveTab('all')} 
+            style={{ 
+              padding: '12px 24px', 
+              border: 'none', 
+              background: 'none', 
+              cursor: 'pointer', 
+              fontSize: '0.95rem', 
+              fontWeight: 800, 
+              color: activeTab === 'all' ? '#64748b' : 'var(--text-sub)', 
+              borderBottom: activeTab === 'all' ? '3px solid #64748b' : '3px solid transparent', 
+              transition: 'all 0.2s', 
+              marginBottom: '-2px' 
+            }}
+          >
+            システム全案件 ({allCases.length})
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -174,7 +228,7 @@ const CaseListPage = () => {
               <thead>
                 <tr>
                   <th className="align-left" onClick={() => handleSort('customerName')} style={{ cursor: 'pointer' }}>顧客名 {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  {activeTab === 'team' && <th className="align-left">担当代理店</th>}
+                  {(activeTab === 'team' || activeTab === 'all') && <th className="align-left">担当代理店</th>}
                   <th className="align-center">楽天市場</th>
                   <th className="align-center">Yahoo!</th>
                   <th className="align-center">au PAY</th>
@@ -188,9 +242,10 @@ const CaseListPage = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ fontWeight: 800 }}>{c.customerName}</div>
                         {renderCustomerStatus(c.email)}
+                        {activeTab === 'all' && c.referrerId === user?.id && <Badge color="var(--primary)" style={{fontSize: '0.6rem'}}>直紹介</Badge>}
                       </div>
                     </td>
-                    {activeTab === 'team' && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
+                    {(activeTab === 'team' || activeTab === 'all') && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.rakuten)}>{c.mallProgress.rakuten}</span></td>
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.yahoo)}>{c.mallProgress.yahoo}</span></td>
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.aupay)}>{c.mallProgress.aupay}</span></td>
