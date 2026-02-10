@@ -7,7 +7,7 @@ import { CaseStatus, PlatformType, MallOpeningStatus, Case, UserStatus, AgencyAp
 import { Card, Input, Select, Button, Badge } from '../components/UI';
 
 type SortKey = 'customerName' | 'updatedAt' | 'agencyName' | 'rakuten' | 'yahoo' | 'aupay';
-type ListTab = 'mine' | 'team' | 'all';
+type ListTab = 'mine' | 'team';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
@@ -19,7 +19,6 @@ const CaseListPage = () => {
   
   const [myCases, setMyCases] = useState<Case[]>([]);
   const [teamCases, setTeamCases] = useState<Case[]>([]);
-  const [allCases, setAllCases] = useState<Case[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,16 +47,14 @@ const CaseListPage = () => {
     const loadData = async () => {
       if (!user) return;
       setLoading(true);
-      const [m, t, u, a] = await Promise.all([
+      const [m, t, u] = await Promise.all([
         db.getCases(user),
         db.getTeamCases(user),
-        db.getUsers(),
-        user.role === UserRole.ADMIN ? db.getAllCases() : Promise.resolve([])
+        db.getUsers()
       ]);
       setMyCases(m);
       setTeamCases(t);
       setAllUsers(u);
-      setAllCases(a);
       setLoading(false);
     };
     loadData();
@@ -65,9 +62,8 @@ const CaseListPage = () => {
 
   const currentCases = useMemo(() => {
     if (activeTab === 'mine') return myCases;
-    if (activeTab === 'team') return teamCases;
-    return allCases;
-  }, [activeTab, myCases, teamCases, allCases]);
+    return teamCases;
+  }, [activeTab, myCases, teamCases]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({
@@ -139,8 +135,6 @@ const CaseListPage = () => {
     return <Badge color="#94a3b8">顧客</Badge>;
   };
 
-  const isAdmin = user?.role === UserRole.ADMIN;
-
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
@@ -148,7 +142,7 @@ const CaseListPage = () => {
           <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.02em' }}>
             案件管理 <span style={{ color: 'var(--primary)' }}>.</span>
           </h1>
-          <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '4px' }}>案件の新規登録とステータス管理を行います。</p>
+          <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '4px' }}>直紹介およびチーム組織の案件進捗を管理します。</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <i className="fa-solid fa-plus"></i> 新規案件登録
@@ -190,25 +184,6 @@ const CaseListPage = () => {
         >
           チームの案件 ({teamCases.length})
         </button>
-        {isAdmin && (
-          <button 
-            onClick={() => setActiveTab('all')} 
-            style={{ 
-              padding: '12px 24px', 
-              border: 'none', 
-              background: 'none', 
-              cursor: 'pointer', 
-              fontSize: '0.95rem', 
-              fontWeight: 800, 
-              color: activeTab === 'all' ? '#64748b' : 'var(--text-sub)', 
-              borderBottom: activeTab === 'all' ? '3px solid #64748b' : '3px solid transparent', 
-              transition: 'all 0.2s', 
-              marginBottom: '-2px' 
-            }}
-          >
-            システム全案件 ({allCases.length})
-          </button>
-        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -228,7 +203,7 @@ const CaseListPage = () => {
               <thead>
                 <tr>
                   <th className="align-left" onClick={() => handleSort('customerName')} style={{ cursor: 'pointer' }}>顧客名 {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  {(activeTab === 'team' || activeTab === 'all') && <th className="align-left">担当代理店</th>}
+                  {activeTab === 'team' && <th className="align-left">担当代理店</th>}
                   <th className="align-center">楽天市場</th>
                   <th className="align-center">Yahoo!</th>
                   <th className="align-center">au PAY</th>
@@ -242,10 +217,9 @@ const CaseListPage = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ fontWeight: 800 }}>{c.customerName}</div>
                         {renderCustomerStatus(c.email)}
-                        {activeTab === 'all' && c.referrerId === user?.id && <Badge color="var(--primary)" style={{fontSize: '0.6rem'}}>直紹介</Badge>}
                       </div>
                     </td>
-                    {(activeTab === 'team' || activeTab === 'all') && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
+                    {activeTab === 'team' && <td className="align-left"><span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{c.agencyName}</span></td>}
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.rakuten)}>{c.mallProgress.rakuten}</span></td>
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.yahoo)}>{c.mallProgress.yahoo}</span></td>
                     <td className="align-center"><span style={getProgressStyle(c.mallProgress.aupay)}>{c.mallProgress.aupay}</span></td>
