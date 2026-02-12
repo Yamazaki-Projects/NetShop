@@ -5,36 +5,91 @@ import {
 import { supabase } from './supabaseClient';
 
 class DBService {
+  /**
+   * 入力されたIDをシステム内部のメールアドレス形式に変換します。
+   * 例: "admin" -> "admin@net-shop.com"
+   */
   private toInternalEmail(loginId: string): string {
     if (loginId.includes('@')) return loginId;
-    return `${loginId}@net-shop.com`;
+    return `${loginId.trim()}@net-shop.com`;
   }
 
   async login(loginId: string, pass: string): Promise<User | null> {
     const email = this.toInternalEmail(loginId);
+    console.log(`[Login] Attempting auth for: ${email}`);
+
     try {
+      // 1. Supabase Authで認証
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password: pass,
       });
+
       if (authError || !authData.user) {
-        console.error("Auth error:", authError);
+        console.error("[Login] Auth failed:", authError?.message);
         return null;
       }
 
-      const { data: profile, error: profileError } = await supabase
+      const authId = authData.user.id;
+      console.log(`[Login] Auth successful. UUID: ${authId}`);
+
+      // 2. usersテーブルからプロフィールを取得
+      let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', authData.user.id)
-        .single();
+        .eq('id', authId)
+        .maybeSingle();
 
-      if (profileError) {
-        console.error("Profile fetch error:", profileError);
-        return null;
+      // 3. プロフィールが存在しない場合、その場で自動作成（オートプロビジョニング）
+      if (!profile) {
+        console.log(`[Login] Profile missing in 'users' table. Creating auto-profile for: ${email}`);
+        
+        // admin@net-shop.com の場合は特権管理者として作成
+        const isAdmin = email.toLowerCase() === 'admin@net-shop.com';
+        
+        const newProfile = {
+          id: authId,
+          login_id: loginId.includes('@') ? loginId.split('@')[0] : loginId,
+          email: email,
+          name: isAdmin ? 'システム管理者' : '新規ユーザー',
+          role: isAdmin ? UserRole.ADMIN : UserRole.AGENCY,
+          status: isAdmin ? UserStatus.AGENCY : UserStatus.CUSTOMER,
+          agency_application_status: isAdmin ? AgencyApplicationStatus.APPROVED : AgencyApplicationStatus.NONE,
+          created_at: new Date().toISOString()
+        };
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from('users')
+          .insert([newProfile])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("[Login] Failed to auto-create user profile:", insertError);
+          // 既存のメールアドレスで別のUUIDがある可能性を考慮し、メールアドレスで再検索
+          const { data: existingByEmail } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+          
+          if (existingByEmail) {
+            console.log("[Login] Found existing profile by email. Syncing UUID...");
+            await supabase.from('users').update({ id: authId }).eq('email', email);
+            profile = { ...existingByEmail, id: authId };
+          } else {
+            alert("ログインは成功しましたが、データベースの初期化に失敗しました。管理者にお問い合わせください。");
+            return null;
+          }
+        } else {
+          profile = insertedData;
+          console.log("[Login] Auto-profile created successfully.");
+        }
       }
-      return this.mapUser(profile);
+
+      return profile ? this.mapUser(profile) : null;
     } catch (e) {
-      console.error("Critical login error:", e);
+      console.error("[Login] Critical error:", e);
       return null;
     }
   }
