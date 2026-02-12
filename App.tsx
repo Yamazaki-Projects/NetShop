@@ -20,7 +20,6 @@ interface AppContextType {
   setUser: (user: User | null) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
-  toggleTheme: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -49,24 +48,58 @@ const SidebarLink = ({ to, icon, label, active }: { to: string; icon: string; la
   </Link>
 );
 
+const ThemeSelector = () => {
+  const { themeMode, setThemeMode } = useAppContext();
+  
+  const modes: { id: ThemeMode; icon: string; label: string }[] = [
+    { id: 'light', icon: 'fa-sun', label: 'ライト' },
+    { id: 'system', icon: 'fa-circle-half-stroke', label: '自動' },
+    { id: 'dark', icon: 'fa-moon', label: 'ダーク' },
+  ];
+
+  return (
+    <div style={{ 
+      display: 'flex', 
+      background: 'rgba(255,255,255,0.05)', 
+      borderRadius: '12px', 
+      padding: '4px', 
+      marginBottom: '20px',
+      border: '1px solid rgba(255,255,255,0.1)' 
+    }}>
+      {modes.map((m) => (
+        <button
+          key={m.id}
+          onClick={() => setThemeMode(m.id)}
+          title={m.label}
+          style={{
+            flex: 1,
+            padding: '8px',
+            border: 'none',
+            background: themeMode === m.id ? 'var(--grad-primary)' : 'transparent',
+            color: themeMode === m.id ? 'white' : 'rgba(255,255,255,0.4)',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          <i className={`fa-solid ${m.icon}`} style={{ fontSize: '0.9rem' }}></i>
+          <span style={{ fontSize: '0.6rem', fontWeight: 800 }}>{m.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const Layout = ({ children }: { children?: React.ReactNode }) => {
-  const { user, setUser, themeMode, toggleTheme } = useAppContext();
+  const { user, setUser } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
 
   if (!user) return null;
-
-  const getThemeIcon = () => {
-    if (themeMode === 'light') return 'fa-sun';
-    if (themeMode === 'dark') return 'fa-moon';
-    return 'fa-circle-half-stroke';
-  };
-
-  const getThemeLabel = () => {
-    if (themeMode === 'light') return 'ライト';
-    if (themeMode === 'dark') return 'ダーク';
-    return '自動';
-  };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -107,6 +140,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         </nav>
 
         <div style={{ padding: '24px', background: 'rgba(0,0,0,0.2)' }}>
+          {/* テーマセレクター */}
+          <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '10px', marginLeft: '4px' }}>Appearance</div>
+          <ThemeSelector />
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div style={{ 
@@ -169,22 +206,34 @@ export default function App() {
     return saved || 'system';
   });
 
-  const applyTheme = (mode: ThemeMode) => {
-    const html = document.documentElement;
-    let isDark = mode === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : mode === 'dark';
-    html.classList.toggle('dark-mode', isDark);
-    localStorage.setItem('theme-mode', mode);
-  };
+  useEffect(() => {
+    const applyTheme = () => {
+      const html = document.documentElement;
+      let isDark = false;
+      
+      if (themeMode === 'system') {
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } else {
+        isDark = themeMode === 'dark';
+      }
+      
+      html.classList.toggle('dark-mode', isDark);
+      localStorage.setItem('theme-mode', themeMode);
+    };
 
-  useEffect(() => { applyTheme(themeMode); }, [themeMode]);
+    applyTheme();
 
-  const toggleTheme = () => {
-    const modes: ThemeMode[] = ['system', 'light', 'dark'];
-    setThemeMode(modes[(modes.indexOf(themeMode) + 1) % modes.length]);
-  };
+    // システム設定が変更されたときの監視 (systemモード時のみ)
+    if (themeMode === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => applyTheme();
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, [themeMode]);
 
   return (
-    <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode, toggleTheme }}>
+    <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

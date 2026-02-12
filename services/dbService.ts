@@ -1,12 +1,11 @@
 
 import { 
-  User, Case, CaseStatus, AuditLog, UserRole, UserStatus, TaskStatus, MallOpeningStatus, AgencyApplicationStatus
+  User, Case, CaseStatus, UserRole, UserStatus, TaskStatus, MallOpeningStatus, AgencyApplicationStatus
 } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { mockUsers, mockCases } from './mockData';
 
 class DBService {
-  // メモリ内での状態管理（バックエンドがない場合のデモ用）
   private localUsers: User[] = [...mockUsers];
   private localCases: Case[] = [...mockCases];
 
@@ -15,9 +14,6 @@ class DBService {
     return `${loginId}@net-shop.com`;
   }
 
-  /**
-   * 汎用的なデータ取得/実行ラッパー
-   */
   private async execute<T>(
     supabaseOp: () => any,
     mockOp: () => T
@@ -58,15 +54,15 @@ class DBService {
       if (profileError) return null;
       return this.mapUser(profile);
     } catch (e) {
-      return this.login(loginId, pass); 
+      return null;
     }
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
     return this.execute(
-      () => supabase.from('users').select('*').eq('email', email).single(),
+      () => supabase.from('users').select('*').eq('email', email).maybeSingle(),
       () => this.localUsers.find(u => u.email === email) || null
-    ).then(res => res ? (isSupabaseConfigured ? this.mapUser(res) : res) : null);
+    ).then(res => res ? (isSupabaseConfigured ? this.mapUser(res) : res as User) : null);
   }
 
   async getPendingApplications(): Promise<User[]> {
@@ -114,17 +110,15 @@ class DBService {
 
   async checkRegistrationEligibility(customerId: string): Promise<{ ok: boolean; reason?: string }> {
     const user = await this.execute(
-      () => supabase.from('users').select('*').eq('login_id', customerId).single(),
+      () => supabase.from('users').select('*').eq('login_id', customerId).maybeSingle(),
       () => this.localUsers.find(u => u.loginId === customerId) || null
     );
 
     if (!user) return { ok: false, reason: 'not_approved' };
     
-    const status = isSupabaseConfigured ? (user as any).agency_application_status : (user as User).agencyApplicationStatus;
-    const userStatus = isSupabaseConfigured ? (user as any).status : (user as User).status;
-
-    if (userStatus === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
-    if (status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
+    const mappedUser = isSupabaseConfigured ? this.mapUser(user) : (user as User);
+    if (mappedUser.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
+    if (mappedUser.agencyApplicationStatus !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
     
     return { ok: true };
   }
@@ -160,10 +154,6 @@ class DBService {
     ).then(res => (res as any[]).map(u => isSupabaseConfigured ? this.mapUser(u) : u));
   }
 
-  /**
-   * ユーザーの「直紹介案件」のみを取得します。
-   * 管理者の場合でも全件ではなく、自身の紹介案件に絞り込みます。
-   */
   async getCases(user: User): Promise<Case[]> {
     return this.execute(
       () => supabase.from('cases').select('*').eq('referrer_id', user.id).order('updated_at', { ascending: false }),
@@ -180,16 +170,16 @@ class DBService {
 
   async getCaseById(id: string): Promise<Case | null> {
     return this.execute(
-      () => supabase.from('cases').select('*').eq('id', id).single(),
+      () => supabase.from('cases').select('*').eq('id', id).maybeSingle(),
       () => this.localCases.find(c => c.id === id) || null
-    ).then(res => res ? (isSupabaseConfigured ? this.mapCase(res) : res) : null);
+    ).then(res => res ? (isSupabaseConfigured ? this.mapCase(res) : res as Case) : null);
   }
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
     const rate = await this.calculateRate(actor.id);
     const baseAmount = actor.manualBaseAmountOverride || 198000;
+    
     const dbPayload = {
-      ...newCaseData,
       id: `CASE-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
       agency_id: actor.id,
       agency_name: actor.name,
@@ -197,6 +187,22 @@ class DBService {
       status: CaseStatus.DRAFT,
       base_amount: baseAmount,
       applied_rate: rate,
+      customer_type: newCaseData.customerType,
+      company_name: newCaseData.companyName,
+      company_name_kana: newCaseData.companyNameKana,
+      representative_name: newCaseData.representativeName,
+      representative_name_kana: newCaseData.representativeNameKana,
+      corporate_number: newCaseData.corporateNumber,
+      established_date: newCaseData.establishedDate,
+      zip_code: newCaseData.zipCode,
+      address: newCaseData.address,
+      rep_name: newCaseData.repName,
+      rep_name_kana: newCaseData.repNameKana,
+      rep_birth_date: newCaseData.repBirthDate,
+      rep_zip_code: newCaseData.repZipCode,
+      rep_address: newCaseData.repAddress,
+      phone: newCaseData.phone,
+      email: newCaseData.email,
       mall_progress: { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
       tasks: [{ id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO }],
       updated_at: new Date().toISOString(),
@@ -215,16 +221,50 @@ class DBService {
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
+    const dbUpdates: any = { updated_at: new Date().toISOString() };
+    
+    const mapKeys: Record<string, string> = {
+      agencyId: 'agency_id',
+      agencyName: 'agency_name',
+      referrerId: 'referrer_id',
+      customerType: 'customer_type',
+      companyName: 'company_name',
+      companyNameKana: 'company_name_kana',
+      representativeName: 'representative_name',
+      representativeNameKana: 'representative_name_kana',
+      corporateNumber: 'corporate_number',
+      establishedDate: 'established_date',
+      zipCode: 'zip_code',
+      repName: 'rep_name',
+      repNameKana: 'rep_name_kana',
+      repBirthDate: 'rep_birth_date',
+      repZipCode: 'rep_zip_code',
+      repAddress: 'rep_address',
+      baseAmount: 'base_amount',
+      appliedRate: 'applied_rate',
+      isManualAdjustment: 'is_manual_adjustment',
+      manualAgencyAmount: 'manual_agency_amount',
+      mallProgress: 'mall_progress',
+      rakutenInfo: 'rakuten_info',
+      subline: 'subline',
+      emailJp: 'email_jp'
+    };
+
+    Object.keys(updates).forEach(key => {
+      const dbKey = mapKeys[key] || key;
+      dbUpdates[dbKey] = updates[key];
+    });
+
     if (!isSupabaseConfigured) {
       const index = this.localCases.findIndex(c => c.id === id);
       if (index !== -1) {
-        this.localCases[index] = { ...this.localCases[index], ...updates, updatedAt: new Date().toISOString() };
+        this.localCases[index] = this.mapCase({ ...this.localCases[index], ...dbUpdates });
         return this.localCases[index];
       }
       return null;
     }
 
-    const { data, error } = await supabase.from('cases').update(updates).eq('id', id).select().single();
+    const { data, error } = await supabase.from('cases').update(dbUpdates).eq('id', id).select().single();
     if (error) return null;
     return this.mapCase(data);
   }
@@ -239,13 +279,13 @@ class DBService {
 
   async calculateRate(userId: string): Promise<number> {
     const user = await this.execute(
-      () => supabase.from('users').select('*').eq('id', userId).single(),
+      () => supabase.from('users').select('*').eq('id', userId).maybeSingle(),
       () => this.localUsers.find(u => u.id === userId) || null
     );
     if (!user) return 0.3;
     
-    const manualRate = isSupabaseConfigured ? (user as any).manual_rate_override : (user as User).manualRateOverride;
-    if (manualRate != null) return manualRate;
+    const mappedUser = isSupabaseConfigured ? this.mapUser(user) : (user as User);
+    if (mappedUser.manualRateOverride != null) return mappedUser.manualRateOverride;
 
     const count = await this.getApprovedCount(userId);
     return count >= 11 ? 0.5 : (count >= 2 ? 0.4 : 0.3);
@@ -268,12 +308,15 @@ class DBService {
     );
     
     if (!users) return [];
-    let ids = (users as any[]).map(u => u.id);
-    for (const id of ids) {
-      const subIds = await this.getDownlineUserIds(id);
-      ids = [...ids, ...subIds];
+    const directIds = (users as any[]).map(u => u.id);
+    let allDescendantIds = [...directIds];
+
+    for (const id of directIds) {
+      const descendants = await this.getDownlineUserIds(id);
+      allDescendantIds = [...allDescendantIds, ...descendants];
     }
-    return Array.from(new Set(ids));
+    
+    return Array.from(new Set(allDescendantIds));
   }
 
   async applyForAgency(userId: string, actor: User): Promise<{ ok: boolean }> {
@@ -347,12 +390,12 @@ class DBService {
       phone: c.phone,
       email: c.email,
       customerName: c.rep_name || c.repName || c.company_name || c.companyName,
-      baseAmount: c.base_amount || c.baseAmount,
-      appliedRate: c.applied_rate || c.appliedRate,
-      isManualAdjustment: c.is_manual_adjustment || c.isManualAdjustment,
-      manualAgencyAmount: c.manual_agency_amount || c.manualAgencyAmount,
+      baseAmount: Number(c.base_amount || c.baseAmount || 0),
+      appliedRate: Number(c.applied_rate || c.appliedRate || 0),
+      isManualAdjustment: !!(c.is_manual_adjustment || c.isManualAdjustment),
+      manualAgencyAmount: Number(c.manual_agency_amount || c.manualAgencyAmount || 0),
       tasks: c.tasks || [],
-      mallProgress: c.mall_progress || c.mallProgress || {},
+      mallProgress: c.mall_progress || c.mallProgress || { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
       subline: c.subline || { status: 'none' },
       emailJp: c.email_jp || c.emailJp || { status: 'none' },
       rakutenInfo: c.rakuten_info || c.rakutenInfo || {},

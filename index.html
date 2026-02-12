@@ -27,7 +27,7 @@
         --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      /* Dark mode class */
+      /* Dark mode refinement */
       html.dark-mode {
         --bg-main: #020617;
         --bg-card: #0f172a;
@@ -36,6 +36,11 @@
         --border: #1e293b;
         --text-main: #f8fafc;
         --text-sub: #94a3b8;
+        color-scheme: dark;
+      }
+
+      html {
+        transition: background-color 0.5s ease;
       }
 
       body {
@@ -45,7 +50,7 @@
         color: var(--text-main);
         text-align: left;
         -webkit-font-smoothing: antialiased;
-        transition: background-color 0.4s ease, color 0.4s ease;
+        transition: background-color 0.5s ease, color 0.5s ease;
       }
 
       * { box-sizing: border-box; }
@@ -115,7 +120,7 @@
         border: 1px solid var(--border);
         border-radius: var(--radius);
         overflow: hidden;
-        transition: background-color 0.4s ease, border-color 0.4s ease;
+        transition: background-color 0.5s ease, border-color 0.5s ease;
       }
 
       @keyframes fadeIn {
@@ -132,25 +137,6 @@
         flex-direction: column;
         color: white;
         transition: background-color 0.4s ease;
-      }
-      
-      .theme-toggle-btn {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        color: white;
-        padding: 8px 12px;
-        border-radius: 10px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        transition: all 0.2s;
-        font-size: 0.75rem;
-        font-weight: 700;
-      }
-      .theme-toggle-btn:hover {
-        background: rgba(255,255,255,0.1);
-        border-color: rgba(255,255,255,0.2);
       }
     </style>
 <script type="importmap">
