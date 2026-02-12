@@ -2,41 +2,15 @@
 import { 
   User, Case, CaseStatus, UserRole, UserStatus, TaskStatus, MallOpeningStatus, AgencyApplicationStatus
 } from '../types';
-import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { mockUsers, mockCases } from './mockData';
+import { supabase } from './supabaseClient';
 
 class DBService {
-  private localUsers: User[] = [...mockUsers];
-  private localCases: Case[] = [...mockCases];
-
   private toInternalEmail(loginId: string): string {
     if (loginId.includes('@')) return loginId;
     return `${loginId}@net-shop.com`;
   }
 
-  private async execute<T>(
-    supabaseOp: () => any,
-    mockOp: () => T
-  ): Promise<T> {
-    if (!isSupabaseConfigured) {
-      return mockOp();
-    }
-    try {
-      const { data, error } = await supabaseOp();
-      if (error) throw error;
-      return data as unknown as T;
-    } catch (e) {
-      console.warn("Supabase operation failed, falling back to mock:", e);
-      return mockOp();
-    }
-  }
-
   async login(loginId: string, pass: string): Promise<User | null> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.loginId === loginId && (u as any).password === pass);
-      return user || null;
-    }
-
     const email = this.toInternalEmail(loginId);
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -54,34 +28,27 @@ class DBService {
       if (profileError) return null;
       return this.mapUser(profile);
     } catch (e) {
+      console.error("Login failed:", e);
       return null;
     }
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    return this.execute(
-      () => supabase.from('users').select('*').eq('email', email).maybeSingle(),
-      () => this.localUsers.find(u => u.email === email) || null
-    ).then(res => res ? (isSupabaseConfigured ? this.mapUser(res) : res as User) : null);
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+    if (error || !data) return null;
+    return this.mapUser(data);
   }
 
   async getPendingApplications(): Promise<User[]> {
-    return this.execute(
-      () => supabase.from('users').select('*').eq('agency_application_status', AgencyApplicationStatus.PENDING),
-      () => this.localUsers.filter(u => u.agencyApplicationStatus === AgencyApplicationStatus.PENDING)
-    ).then(res => (res as any[]).map(u => isSupabaseConfigured ? this.mapUser(u) : u));
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('agency_application_status', AgencyApplicationStatus.PENDING);
+    if (error) return [];
+    return (data || []).map(u => this.mapUser(u));
   }
 
   async approveApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.loginId === customerId);
-      if (user) {
-        user.agencyApplicationStatus = AgencyApplicationStatus.APPROVED;
-        return { ok: true };
-      }
-      return { ok: false, message: 'ユーザーが見つかりません' };
-    }
-
     const { error } = await supabase
       .from('users')
       .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
@@ -91,15 +58,6 @@ class DBService {
   }
 
   async rejectApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.loginId === customerId);
-      if (user) {
-        user.agencyApplicationStatus = AgencyApplicationStatus.NONE;
-        return { ok: true };
-      }
-      return { ok: false, message: 'ユーザーが見つかりません' };
-    }
-
     const { error } = await supabase
       .from('users')
       .update({ agency_application_status: AgencyApplicationStatus.NONE })
@@ -109,14 +67,11 @@ class DBService {
   }
 
   async checkRegistrationEligibility(customerId: string): Promise<{ ok: boolean; reason?: string }> {
-    const user = await this.execute(
-      () => supabase.from('users').select('*').eq('login_id', customerId).maybeSingle(),
-      () => this.localUsers.find(u => u.loginId === customerId) || null
-    );
+    const { data: user, error } = await supabase.from('users').select('*').eq('login_id', customerId).maybeSingle();
 
-    if (!user) return { ok: false, reason: 'not_approved' };
+    if (error || !user) return { ok: false, reason: 'not_approved' };
     
-    const mappedUser = isSupabaseConfigured ? this.mapUser(user) : (user as User);
+    const mappedUser = this.mapUser(user);
     if (mappedUser.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
     if (mappedUser.agencyApplicationStatus !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
     
@@ -124,17 +79,6 @@ class DBService {
   }
 
   async completeRegistration(customerId: string, password: string): Promise<{ ok: boolean; reason?: string }> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.loginId === customerId);
-      if (user) {
-        user.status = UserStatus.AGENCY;
-        user.role = UserRole.AGENCY;
-        (user as any).password = password; 
-        return { ok: true };
-      }
-      return { ok: false, reason: 'not_found' };
-    }
-
     const { error } = await supabase
       .from('users')
       .update({ 
@@ -148,31 +92,31 @@ class DBService {
   }
 
   async getUsers(): Promise<User[]> {
-    return this.execute(
-      () => supabase.from('users').select('*').order('created_at', { ascending: false }),
-      () => this.localUsers
-    ).then(res => (res as any[]).map(u => isSupabaseConfigured ? this.mapUser(u) : u));
+    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map(u => this.mapUser(u));
   }
 
   async getCases(user: User): Promise<Case[]> {
-    return this.execute(
-      () => supabase.from('cases').select('*').eq('referrer_id', user.id).order('updated_at', { ascending: false }),
-      () => this.localCases.filter(c => c.referrerId === user.id)
-    ).then(res => (res as any[]).map(c => isSupabaseConfigured ? this.mapCase(c) : c));
+    const { data, error } = await supabase
+      .from('cases')
+      .select('*')
+      .eq('referrer_id', user.id)
+      .order('updated_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map(c => this.mapCase(c));
   }
 
   async getAllCases(): Promise<Case[]> {
-    return this.execute(
-      () => supabase.from('cases').select('*').order('updated_at', { ascending: false }),
-      () => this.localCases
-    ).then(res => (res as any[]).map(c => isSupabaseConfigured ? this.mapCase(c) : c));
+    const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map(c => this.mapCase(c));
   }
 
   async getCaseById(id: string): Promise<Case | null> {
-    return this.execute(
-      () => supabase.from('cases').select('*').eq('id', id).maybeSingle(),
-      () => this.localCases.find(c => c.id === id) || null
-    ).then(res => res ? (isSupabaseConfigured ? this.mapCase(res) : res as Case) : null);
+    const { data, error } = await supabase.from('cases').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    return this.mapCase(data);
   }
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
@@ -209,14 +153,11 @@ class DBService {
       created_at: new Date().toISOString(),
     };
 
-    if (!isSupabaseConfigured) {
-      const mapped = this.mapCase(dbPayload); 
-      this.localCases.push(mapped);
-      return mapped;
-    }
-
     const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
-    if (error) return null;
+    if (error) {
+      console.error("Create Case Error:", error);
+      return null;
+    }
     return this.mapCase(data);
   }
 
@@ -255,36 +196,29 @@ class DBService {
       dbUpdates[dbKey] = updates[key];
     });
 
-    if (!isSupabaseConfigured) {
-      const index = this.localCases.findIndex(c => c.id === id);
-      if (index !== -1) {
-        this.localCases[index] = this.mapCase({ ...this.localCases[index], ...dbUpdates });
-        return this.localCases[index];
-      }
+    const { data, error } = await supabase.from('cases').update(dbUpdates).eq('id', id).select().single();
+    if (error) {
+      console.error("Update Case Error:", error);
       return null;
     }
-
-    const { data, error } = await supabase.from('cases').update(dbUpdates).eq('id', id).select().single();
-    if (error) return null;
     return this.mapCase(data);
   }
 
   async getApprovedCount(userId: string): Promise<number> {
-    if (!isSupabaseConfigured) {
-      return this.localCases.filter(c => c.referrerId === userId && c.status === CaseStatus.APPROVED).length;
-    }
-    const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
+    const { count, error } = await supabase
+      .from('cases')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', userId)
+      .eq('status', CaseStatus.APPROVED);
+    if (error) return 0;
     return count || 0;
   }
 
   async calculateRate(userId: string): Promise<number> {
-    const user = await this.execute(
-      () => supabase.from('users').select('*').eq('id', userId).maybeSingle(),
-      () => this.localUsers.find(u => u.id === userId) || null
-    );
-    if (!user) return 0.3;
+    const { data: user, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+    if (error || !user) return 0.3;
     
-    const mappedUser = isSupabaseConfigured ? this.mapUser(user) : (user as User);
+    const mappedUser = this.mapUser(user);
     if (mappedUser.manualRateOverride != null) return mappedUser.manualRateOverride;
 
     const count = await this.getApprovedCount(userId);
@@ -295,19 +229,15 @@ class DBService {
     const ids = await this.getDownlineUserIds(user.id);
     if (ids.length === 0) return [];
 
-    return this.execute(
-      () => supabase.from('cases').select('*').in('referrer_id', ids),
-      () => this.localCases.filter(c => ids.includes(c.referrerId || ''))
-    ).then(res => (res as any[]).map(c => isSupabaseConfigured ? this.mapCase(c) : c));
+    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', ids);
+    if (error) return [];
+    return (data || []).map(c => this.mapCase(c));
   }
 
   async getDownlineUserIds(userId: string): Promise<string[]> {
-    const users = await this.execute(
-      () => supabase.from('users').select('id').eq('referrer_id', userId),
-      () => this.localUsers.filter(u => u.referrerId === userId).map(u => ({ id: u.id }))
-    );
+    const { data: users, error } = await supabase.from('users').select('id').eq('referrer_id', userId);
     
-    if (!users) return [];
+    if (error || !users) return [];
     const directIds = (users as any[]).map(u => u.id);
     let allDescendantIds = [...directIds];
 
@@ -320,28 +250,11 @@ class DBService {
   }
 
   async applyForAgency(userId: string, actor: User): Promise<{ ok: boolean }> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.id === userId);
-      if (user) {
-        user.agencyApplicationStatus = AgencyApplicationStatus.PENDING;
-        return { ok: true };
-      }
-      return { ok: false };
-    }
     const { error } = await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', userId);
     return { ok: !error };
   }
 
   async updateUserRewardConfig(userId: string, config: { manualBaseAmountOverride: number, manualRateOverride: number }, actor: User): Promise<{ ok: boolean }> {
-    if (!isSupabaseConfigured) {
-      const user = this.localUsers.find(u => u.id === userId);
-      if (user) {
-        user.manualBaseAmountOverride = config.manualBaseAmountOverride;
-        user.manualRateOverride = config.manualRateOverride;
-        return { ok: true };
-      }
-      return { ok: false };
-    }
     const { error } = await supabase.from('users').update({
         manual_base_amount_override: config.manualBaseAmountOverride,
         manual_rate_override: config.manualRateOverride
@@ -352,55 +265,55 @@ class DBService {
   private mapUser(u: any): User {
     return {
       id: u.id,
-      loginId: u.login_id || u.loginId,
+      loginId: u.login_id,
       email: u.email,
       name: u.name,
       role: u.role,
       status: u.status,
-      referrerId: u.referrer_id || u.referrerId,
-      agencyApplicationStatus: u.agency_application_status || u.agencyApplicationStatus,
-      manualRateOverride: u.manual_rate_override || u.manualRateOverride,
-      manualBaseAmountOverride: u.manual_base_amount_override || u.manualBaseAmountOverride,
-      createdAt: u.created_at || u.createdAt
+      referrerId: u.referrer_id,
+      agencyApplicationStatus: u.agency_application_status,
+      manualRateOverride: u.manual_rate_override,
+      manualBaseAmountOverride: u.manual_base_amount_override,
+      createdAt: u.created_at
     };
   }
 
   private mapCase(c: any): Case {
     return {
       id: c.id,
-      agencyId: c.agency_id || c.agencyId,
-      agencyName: c.agency_name || c.agencyName,
-      referrerId: c.referrer_id || c.referrerId,
+      agencyId: c.agency_id,
+      agencyName: c.agency_name,
+      referrerId: c.referrer_id,
       status: c.status,
       platform: c.platform,
-      customerType: c.customer_type || c.customerType,
-      companyName: c.company_name || c.companyName,
-      companyNameKana: c.company_name_kana || c.companyNameKana,
-      representativeName: c.representative_name || c.representativeName,
-      representativeNameKana: c.representative_name_kana || c.representativeNameKana,
-      corporateNumber: c.corporate_number || c.corporateNumber,
-      establishedDate: c.established_date || c.establishedDate,
-      zipCode: c.zip_code || c.zipCode,
+      customerType: c.customer_type,
+      companyName: c.company_name,
+      companyNameKana: c.company_name_kana,
+      representativeName: c.representative_name,
+      representativeNameKana: c.representative_name_kana,
+      corporateNumber: c.corporate_number,
+      establishedDate: c.established_date,
+      zipCode: c.zip_code,
       address: c.address,
-      repName: c.rep_name || c.repName,
-      repNameKana: c.rep_name_kana || c.repNameKana,
-      repBirthDate: c.rep_birth_date || c.repBirthDate,
-      repZipCode: c.rep_zip_code || c.repZipCode,
-      repAddress: c.rep_address || c.repAddress,
+      repName: c.rep_name,
+      repNameKana: c.rep_name_kana,
+      repBirthDate: c.rep_birth_date,
+      repZipCode: c.rep_zip_code,
+      repAddress: c.rep_address,
       phone: c.phone,
       email: c.email,
-      customerName: c.rep_name || c.repName || c.company_name || c.companyName,
-      baseAmount: Number(c.base_amount || c.baseAmount || 0),
-      appliedRate: Number(c.applied_rate || c.appliedRate || 0),
-      isManualAdjustment: !!(c.is_manual_adjustment || c.isManualAdjustment),
-      manualAgencyAmount: Number(c.manual_agency_amount || c.manualAgencyAmount || 0),
+      customerName: c.rep_name || c.company_name,
+      baseAmount: Number(c.base_amount || 0),
+      appliedRate: Number(c.applied_rate || 0),
+      isManualAdjustment: !!c.is_manual_adjustment,
+      manualAgencyAmount: Number(c.manual_agency_amount || 0),
       tasks: c.tasks || [],
-      mallProgress: c.mall_progress || c.mallProgress || { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
+      mallProgress: c.mall_progress || { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
       subline: c.subline || { status: 'none' },
-      emailJp: c.email_jp || c.emailJp || { status: 'none' },
-      rakutenInfo: c.rakuten_info || c.rakutenInfo || {},
-      createdAt: c.created_at || c.createdAt,
-      updatedAt: c.updated_at || c.updatedAt,
+      emailJp: c.email_jp || { status: 'none' },
+      rakutenInfo: c.rakuten_info || {},
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
       documents: [],
       reviews: []
     };
