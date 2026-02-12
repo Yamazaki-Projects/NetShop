@@ -17,7 +17,10 @@ class DBService {
         email,
         password: pass,
       });
-      if (authError || !authData.user) return null;
+      if (authError || !authData.user) {
+        console.error("Auth error:", authError);
+        return null;
+      }
 
       const { data: profile, error: profileError } = await supabase
         .from('users')
@@ -25,241 +28,314 @@ class DBService {
         .eq('id', authData.user.id)
         .single();
 
-      if (profileError) return null;
+      if (profileError) {
+        console.error("Profile fetch error:", profileError);
+        return null;
+      }
       return this.mapUser(profile);
     } catch (e) {
-      console.error("Login failed:", e);
+      console.error("Critical login error:", e);
       return null;
     }
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
-    if (error || !data) return null;
-    return this.mapUser(data);
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+      if (error || !data) return null;
+      return this.mapUser(data);
+    } catch (e) {
+      console.error("Fetch user error:", e);
+      return null;
+    }
   }
 
   async getPendingApplications(): Promise<User[]> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('agency_application_status', AgencyApplicationStatus.PENDING);
-    if (error) return [];
-    return (data || []).map(u => this.mapUser(u));
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('agency_application_status', AgencyApplicationStatus.PENDING);
+      if (error) throw error;
+      return (data || []).map(u => this.mapUser(u));
+    } catch (e) {
+      console.error("Fetch pending applications error:", e);
+      return [];
+    }
   }
 
   async approveApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
-      .eq('login_id', customerId);
-    
-    return { ok: !error, message: error?.message };
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
+        .eq('login_id', customerId);
+      return { ok: !error, message: error?.message };
+    } catch (e) {
+      return { ok: false, message: "Connection failed" };
+    }
   }
 
   async rejectApplication(customerId: string): Promise<{ ok: boolean; message?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.NONE })
-      .eq('login_id', customerId);
-    
-    return { ok: !error, message: error?.message };
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ agency_application_status: AgencyApplicationStatus.NONE })
+        .eq('login_id', customerId);
+      return { ok: !error, message: error?.message };
+    } catch (e) {
+      return { ok: false, message: "Connection failed" };
+    }
   }
 
   async checkRegistrationEligibility(customerId: string): Promise<{ ok: boolean; reason?: string }> {
-    const { data: user, error } = await supabase.from('users').select('*').eq('login_id', customerId).maybeSingle();
-
-    if (error || !user) return { ok: false, reason: 'not_approved' };
-    
-    const mappedUser = this.mapUser(user);
-    if (mappedUser.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
-    if (mappedUser.agencyApplicationStatus !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
-    
-    return { ok: true };
+    try {
+      const { data: user, error } = await supabase.from('users').select('*').eq('login_id', customerId).maybeSingle();
+      if (error || !user) return { ok: false, reason: 'not_approved' };
+      
+      const mappedUser = this.mapUser(user);
+      if (mappedUser.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
+      if (mappedUser.agencyApplicationStatus !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
+      
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: 'system_error' };
+    }
   }
 
   async completeRegistration(customerId: string, password: string): Promise<{ ok: boolean; reason?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ 
-        status: UserStatus.AGENCY,
-        role: UserRole.AGENCY,
-        agency_application_status: AgencyApplicationStatus.APPROVED 
-      })
-      .eq('login_id', customerId);
-
-    return { ok: !error };
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          status: UserStatus.AGENCY,
+          role: UserRole.AGENCY,
+          agency_application_status: AgencyApplicationStatus.APPROVED 
+        })
+        .eq('login_id', customerId);
+      return { ok: !error };
+    } catch (e) {
+      return { ok: false };
+    }
   }
 
   async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return (data || []).map(u => this.mapUser(u));
+    try {
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(u => this.mapUser(u));
+    } catch (e) {
+      console.error("Get users error:", e);
+      return [];
+    }
   }
 
   async getCases(user: User): Promise<Case[]> {
-    const { data, error } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('referrer_id', user.id)
-      .order('updated_at', { ascending: false });
-    if (error) return [];
-    return (data || []).map(c => this.mapCase(c));
+    try {
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('referrer_id', user.id)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(c => this.mapCase(c));
+    } catch (e) {
+      console.error("Get cases error:", e);
+      return [];
+    }
   }
 
   async getAllCases(): Promise<Case[]> {
-    const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
-    if (error) return [];
-    return (data || []).map(c => this.mapCase(c));
+    try {
+      const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(c => this.mapCase(c));
+    } catch (e) {
+      console.error("Get all cases error:", e);
+      return [];
+    }
   }
 
   async getCaseById(id: string): Promise<Case | null> {
-    const { data, error } = await supabase.from('cases').select('*').eq('id', id).maybeSingle();
-    if (error || !data) return null;
-    return this.mapCase(data);
+    try {
+      const { data, error } = await supabase.from('cases').select('*').eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      return this.mapCase(data);
+    } catch (e) {
+      console.error("Get case by id error:", e);
+      return null;
+    }
   }
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
-    const rate = await this.calculateRate(actor.id);
-    const baseAmount = actor.manualBaseAmountOverride || 198000;
-    
-    const dbPayload = {
-      id: `CASE-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-      agency_id: actor.id,
-      agency_name: actor.name,
-      referrer_id: actor.id,
-      status: CaseStatus.DRAFT,
-      base_amount: baseAmount,
-      applied_rate: rate,
-      customer_type: newCaseData.customerType,
-      company_name: newCaseData.companyName,
-      company_name_kana: newCaseData.companyNameKana,
-      representative_name: newCaseData.representativeName,
-      representative_name_kana: newCaseData.representativeNameKana,
-      corporate_number: newCaseData.corporateNumber,
-      established_date: newCaseData.establishedDate,
-      zip_code: newCaseData.zipCode,
-      address: newCaseData.address,
-      rep_name: newCaseData.repName,
-      rep_name_kana: newCaseData.repNameKana,
-      rep_birth_date: newCaseData.repBirthDate,
-      rep_zip_code: newCaseData.repZipCode,
-      rep_address: newCaseData.repAddress,
-      phone: newCaseData.phone,
-      email: newCaseData.email,
-      mall_progress: { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
-      tasks: [{ id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO }],
-      updated_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
+    try {
+      const rate = await this.calculateRate(actor.id);
+      const baseAmount = actor.manualBaseAmountOverride || 198000;
+      
+      const dbPayload = {
+        id: `CASE-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+        agency_id: actor.id,
+        agency_name: actor.name,
+        referrer_id: actor.id,
+        status: CaseStatus.DRAFT,
+        base_amount: baseAmount,
+        applied_rate: rate,
+        customer_type: newCaseData.customerType,
+        company_name: newCaseData.companyName,
+        company_name_kana: newCaseData.companyNameKana,
+        representative_name: newCaseData.representativeName,
+        representative_name_kana: newCaseData.representativeNameKana,
+        corporate_number: newCaseData.corporateNumber,
+        established_date: newCaseData.establishedDate,
+        zip_code: newCaseData.zipCode,
+        address: newCaseData.address,
+        rep_name: newCaseData.repName,
+        rep_name_kana: newCaseData.repNameKana,
+        rep_birth_date: newCaseData.repBirthDate,
+        rep_zip_code: newCaseData.repZipCode,
+        rep_address: newCaseData.repAddress,
+        phone: newCaseData.phone,
+        email: newCaseData.email,
+        mall_progress: { rakuten: '申請中', yahoo: '申請中', aupay: '申請中' },
+        tasks: [{ id: 't1', title: '本人確認書類の提出', status: TaskStatus.TODO }],
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
 
-    const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
-    if (error) {
-      console.error("Create Case Error:", error);
+      const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
+      if (error) throw error;
+      return this.mapCase(data);
+    } catch (e) {
+      console.error("Create case error:", e);
       return null;
     }
-    return this.mapCase(data);
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
-    const dbUpdates: any = { updated_at: new Date().toISOString() };
-    
-    const mapKeys: Record<string, string> = {
-      agencyId: 'agency_id',
-      agencyName: 'agency_name',
-      referrerId: 'referrer_id',
-      customerType: 'customer_type',
-      companyName: 'company_name',
-      companyNameKana: 'company_name_kana',
-      representativeName: 'representative_name',
-      representativeNameKana: 'representative_name_kana',
-      corporateNumber: 'corporate_number',
-      establishedDate: 'established_date',
-      zipCode: 'zip_code',
-      repName: 'rep_name',
-      repNameKana: 'rep_name_kana',
-      repBirthDate: 'rep_birth_date',
-      repZipCode: 'rep_zip_code',
-      repAddress: 'rep_address',
-      baseAmount: 'base_amount',
-      appliedRate: 'applied_rate',
-      isManualAdjustment: 'is_manual_adjustment',
-      manualAgencyAmount: 'manual_agency_amount',
-      mallProgress: 'mall_progress',
-      rakutenInfo: 'rakuten_info',
-      subline: 'subline',
-      emailJp: 'email_jp'
-    };
+    try {
+      const dbUpdates: any = { updated_at: new Date().toISOString() };
+      
+      const mapKeys: Record<string, string> = {
+        agencyId: 'agency_id',
+        agencyName: 'agency_name',
+        referrerId: 'referrer_id',
+        customerType: 'customer_type',
+        companyName: 'company_name',
+        companyNameKana: 'company_name_kana',
+        representativeName: 'representative_name',
+        representativeNameKana: 'representative_name_kana',
+        corporateNumber: 'corporate_number',
+        establishedDate: 'established_date',
+        zipCode: 'zip_code',
+        repName: 'rep_name',
+        repNameKana: 'rep_name_kana',
+        repBirthDate: 'rep_birth_date',
+        repZipCode: 'rep_zip_code',
+        repAddress: 'rep_address',
+        baseAmount: 'base_amount',
+        appliedRate: 'applied_rate',
+        isManualAdjustment: 'is_manual_adjustment',
+        manualAgencyAmount: 'manual_agency_amount',
+        mallProgress: 'mall_progress',
+        rakutenInfo: 'rakuten_info',
+        subline: 'subline',
+        emailJp: 'email_jp'
+      };
 
-    Object.keys(updates).forEach(key => {
-      const dbKey = mapKeys[key] || key;
-      dbUpdates[dbKey] = updates[key];
-    });
+      Object.keys(updates).forEach(key => {
+        const dbKey = mapKeys[key] || key;
+        dbUpdates[dbKey] = updates[key];
+      });
 
-    const { data, error } = await supabase.from('cases').update(dbUpdates).eq('id', id).select().single();
-    if (error) {
-      console.error("Update Case Error:", error);
+      const { data, error } = await supabase.from('cases').update(dbUpdates).eq('id', id).select().single();
+      if (error) throw error;
+      return this.mapCase(data);
+    } catch (e) {
+      console.error("Update case error:", e);
       return null;
     }
-    return this.mapCase(data);
   }
 
   async getApprovedCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .eq('referrer_id', userId)
-      .eq('status', CaseStatus.APPROVED);
-    if (error) return 0;
-    return count || 0;
+    try {
+      const { count, error } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('referrer_id', userId)
+        .eq('status', CaseStatus.APPROVED);
+      if (error) return 0;
+      return count || 0;
+    } catch (e) {
+      return 0;
+    }
   }
 
   async calculateRate(userId: string): Promise<number> {
-    const { data: user, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-    if (error || !user) return 0.3;
-    
-    const mappedUser = this.mapUser(user);
-    if (mappedUser.manualRateOverride != null) return mappedUser.manualRateOverride;
+    try {
+      const { data: user, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      if (error || !user) return 0.3;
+      
+      const mappedUser = this.mapUser(user);
+      if (mappedUser.manualRateOverride != null) return mappedUser.manualRateOverride;
 
-    const count = await this.getApprovedCount(userId);
-    return count >= 11 ? 0.5 : (count >= 2 ? 0.4 : 0.3);
+      const count = await this.getApprovedCount(userId);
+      return count >= 11 ? 0.5 : (count >= 2 ? 0.4 : 0.3);
+    } catch (e) {
+      return 0.3;
+    }
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
-    const ids = await this.getDownlineUserIds(user.id);
-    if (ids.length === 0) return [];
+    try {
+      const ids = await this.getDownlineUserIds(user.id);
+      if (ids.length === 0) return [];
 
-    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', ids);
-    if (error) return [];
-    return (data || []).map(c => this.mapCase(c));
+      const { data, error } = await supabase.from('cases').select('*').in('referrer_id', ids);
+      if (error) throw error;
+      return (data || []).map(c => this.mapCase(c));
+    } catch (e) {
+      return [];
+    }
   }
 
   async getDownlineUserIds(userId: string): Promise<string[]> {
-    const { data: users, error } = await supabase.from('users').select('id').eq('referrer_id', userId);
-    
-    if (error || !users) return [];
-    const directIds = (users as any[]).map(u => u.id);
-    let allDescendantIds = [...directIds];
+    try {
+      const { data: users, error } = await supabase.from('users').select('id').eq('referrer_id', userId);
+      
+      if (error || !users) return [];
+      const directIds = (users as any[]).map(u => u.id);
+      let allDescendantIds = [...directIds];
 
-    for (const id of directIds) {
-      const descendants = await this.getDownlineUserIds(id);
-      allDescendantIds = [...allDescendantIds, ...descendants];
+      for (const id of directIds) {
+        const descendants = await this.getDownlineUserIds(id);
+        allDescendantIds = [...allDescendantIds, ...descendants];
+      }
+      
+      return Array.from(new Set(allDescendantIds));
+    } catch (e) {
+      return [];
     }
-    
-    return Array.from(new Set(allDescendantIds));
   }
 
   async applyForAgency(userId: string, actor: User): Promise<{ ok: boolean }> {
-    const { error } = await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', userId);
-    return { ok: !error };
+    try {
+      const { error } = await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', userId);
+      return { ok: !error };
+    } catch (e) {
+      return { ok: false };
+    }
   }
 
   async updateUserRewardConfig(userId: string, config: { manualBaseAmountOverride: number, manualRateOverride: number }, actor: User): Promise<{ ok: boolean }> {
-    const { error } = await supabase.from('users').update({
-        manual_base_amount_override: config.manualBaseAmountOverride,
-        manual_rate_override: config.manualRateOverride
-    }).eq('id', userId);
-    return { ok: !error };
+    try {
+      const { error } = await supabase.from('users').update({
+          manual_base_amount_override: config.manualBaseAmountOverride,
+          manual_rate_override: config.manualRateOverride
+      }).eq('id', userId);
+      return { ok: !error };
+    } catch (e) {
+      return { ok: false };
+    }
   }
 
   private mapUser(u: any): User {
