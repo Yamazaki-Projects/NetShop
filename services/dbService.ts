@@ -14,6 +14,15 @@ class DBService {
   }
 
   /**
+   * 日付文字列が空の場合は null を、それ以外はその値を返すヘルパー
+   * PostgreSQL の date 型に "" を送るとエラーになるのを防ぐ
+   */
+  private toNullableDate(val: any): string | null {
+    if (val === undefined || val === null || val === '') return null;
+    return val;
+  }
+
+  /**
    * ユーザーログイン
    */
   async login(loginId: string, pass: string): Promise<User | null> {
@@ -126,12 +135,12 @@ class DBService {
       representative_name: newCaseData.representativeName,
       representative_name_kana: newCaseData.representativeNameKana,
       corporate_number: newCaseData.corporateNumber,
-      established_date: newCaseData.establishedDate,
+      established_date: this.toNullableDate(newCaseData.establishedDate), // Helper applied
       zip_code: newCaseData.zipCode,
       address: newCaseData.address,
       rep_name: newCaseData.repName,
       rep_name_kana: newCaseData.repNameKana,
-      rep_birth_date: newCaseData.repBirthDate,
+      rep_birth_date: this.toNullableDate(newCaseData.repBirthDate), // Helper applied
       rep_zip_code: newCaseData.repZipCode,
       rep_address: newCaseData.repAddress,
       phone: newCaseData.phone,
@@ -157,6 +166,17 @@ class DBService {
     if (updates.emailJp) { dbUpdates.email_jp = updates.emailJp; delete dbUpdates.emailJp; }
     if (updates.customerType) { dbUpdates.customer_type = updates.customerType; delete dbUpdates.customerType; }
     if (updates.companyName) { dbUpdates.company_name = updates.companyName; delete dbUpdates.companyName; }
+    
+    // 日付型カラムの変換（establishedDate / repBirthDate が含まれている場合）
+    if ('establishedDate' in updates) { 
+      dbUpdates.established_date = this.toNullableDate(updates.establishedDate); 
+      delete dbUpdates.establishedDate; 
+    }
+    if ('repBirthDate' in updates) { 
+      dbUpdates.rep_birth_date = this.toNullableDate(updates.repBirthDate); 
+      delete dbUpdates.repBirthDate; 
+    }
+
     if (updates.isManualAdjustment !== undefined) { dbUpdates.is_manual_adjustment = updates.isManualAdjustment; delete dbUpdates.isManualAdjustment; }
     if (updates.manualAgencyAmount !== undefined) { dbUpdates.manual_agency_amount = updates.manualAgencyAmount; delete dbUpdates.manualAgencyAmount; }
     if (updates.baseAmount !== undefined) { dbUpdates.base_amount = updates.baseAmount; delete dbUpdates.baseAmount; }
