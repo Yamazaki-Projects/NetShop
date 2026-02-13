@@ -201,10 +201,28 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('theme-mode') as ThemeMode;
     return saved || 'system';
   });
+
+  // セッションの復元
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        const u = await db.getCurrentUser();
+        if (u) {
+          setUser(u);
+        }
+      } catch (e) {
+        console.error("Failed to restore session", e);
+      } finally {
+        setInitializing(false);
+      }
+    };
+    initApp();
+  }, []);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -223,7 +241,6 @@ export default function App() {
 
     applyTheme();
 
-    // システム設定が変更されたときの監視 (systemモード時のみ)
     if (themeMode === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const handleChange = () => applyTheme();
@@ -231,6 +248,36 @@ export default function App() {
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
   }, [themeMode]);
+
+  if (initializing) {
+    return (
+      <div style={{ 
+        height: '100vh', 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        background: 'var(--bg-main)',
+        color: 'var(--text-main)'
+      }}>
+        <div style={{ 
+          width: '64px', 
+          height: '64px', 
+          background: 'var(--grad-primary)', 
+          borderRadius: '20px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          color: 'white',
+          boxShadow: '0 12px 24px rgba(79, 70, 229, 0.3)',
+          marginBottom: '24px'
+        }}>
+          <i className="fa-solid fa-bolt fa-2x"></i>
+        </div>
+        <div style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '0.05em' }}>認証情報を確認中...</div>
+      </div>
+    );
+  }
 
   return (
     <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>

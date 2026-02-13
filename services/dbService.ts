@@ -44,6 +44,23 @@ class DBService {
   }
 
   /**
+   * 現在のセッションからユーザー情報を取得（リロード対策）
+   */
+  async getCurrentUser(): Promise<User | null> {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session || !session.user) return null;
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (profileError || !profile) return null;
+    return this.mapUser(profile);
+  }
+
+  /**
    * ユーザーログイン
    */
   async login(loginId: string, pass: string): Promise<User | null> {
