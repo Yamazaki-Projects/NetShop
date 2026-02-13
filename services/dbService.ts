@@ -199,29 +199,39 @@ class DBService {
    * 案件更新
    */
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
-    const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
+    // DB送信用のオブジェクトを構築
+    const dbUpdates: any = { updated_at: new Date().toISOString() };
     
-    // スネークケースへのマッピング
-    if (updates.mallProgress) { dbUpdates.mall_progress = updates.mallProgress; delete dbUpdates.mallProgress; }
-    if (updates.rakutenInfo) { dbUpdates.rakuten_info = updates.rakutenInfo; delete dbUpdates.rakutenInfo; }
-    if (updates.subline) { dbUpdates.subline = updates.subline; delete dbUpdates.subline; }
-    if (updates.emailJp) { dbUpdates.email_jp = updates.emailJp; delete dbUpdates.emailJp; }
-    if (updates.customerType) { dbUpdates.customer_type = updates.customerType; delete dbUpdates.customerType; }
-    if (updates.companyName) { dbUpdates.company_name = updates.companyName; delete dbUpdates.companyName; }
+    // スネークケースへのマッピング（漏れなく追加）
+    if ('status' in updates) dbUpdates.status = updates.status;
+    if ('platform' in updates) dbUpdates.platform = updates.platform;
+    if ('customerType' in updates) dbUpdates.customer_type = updates.customerType;
+    if ('companyName' in updates) dbUpdates.company_name = updates.companyName;
+    if ('companyNameKana' in updates) dbUpdates.company_name_kana = updates.companyNameKana;
+    if ('representativeName' in updates) dbUpdates.representative_name = updates.representativeName;
+    if ('representativeNameKana' in updates) dbUpdates.representative_name_kana = updates.representativeNameKana;
+    if ('corporateNumber' in updates) dbUpdates.corporate_number = updates.corporateNumber;
+    if ('establishedDate' in updates) dbUpdates.established_date = updates.establishedDate;
+    if ('zipCode' in updates) dbUpdates.zip_code = updates.zipCode;
+    if ('address' in updates) dbUpdates.address = updates.address;
     
-    // プロパティ名のマッピング
-    if ('establishedDate' in updates) { 
-      dbUpdates.established_date = updates.establishedDate; 
-      delete dbUpdates.establishedDate; 
-    }
-    if ('repBirthDate' in updates) { 
-      dbUpdates.rep_birth_date = updates.repBirthDate; 
-      delete dbUpdates.repBirthDate; 
-    }
+    if ('repName' in updates) dbUpdates.rep_name = updates.repName;
+    if ('repNameKana' in updates) dbUpdates.rep_name_kana = updates.repNameKana;
+    if ('repBirthDate' in updates) dbUpdates.rep_birth_date = updates.repBirthDate;
+    if ('repZipCode' in updates) dbUpdates.rep_zip_code = updates.repZipCode;
+    if ('repAddress' in updates) dbUpdates.rep_address = updates.repAddress;
+    if ('phone' in updates) dbUpdates.phone = updates.phone;
+    if ('email' in updates) dbUpdates.email = updates.email;
+    
+    if ('mallProgress' in updates) dbUpdates.mall_progress = updates.mallProgress;
+    if ('rakutenInfo' in updates) dbUpdates.rakuten_info = updates.rakutenInfo;
+    if ('subline' in updates) dbUpdates.subline = updates.subline;
+    if ('emailJp' in updates) dbUpdates.email_jp = updates.emailJp;
+    if ('tasks' in updates) dbUpdates.tasks = updates.tasks;
 
-    if (updates.isManualAdjustment !== undefined) { dbUpdates.is_manual_adjustment = updates.isManualAdjustment; delete dbUpdates.isManualAdjustment; }
-    if (updates.manualAgencyAmount !== undefined) { dbUpdates.manual_agency_amount = updates.manualAgencyAmount; delete dbUpdates.manualAgencyAmount; }
-    if (updates.baseAmount !== undefined) { dbUpdates.base_amount = updates.baseAmount; delete dbUpdates.baseAmount; }
+    if (updates.isManualAdjustment !== undefined) dbUpdates.is_manual_adjustment = updates.isManualAdjustment;
+    if (updates.manualAgencyAmount !== undefined) dbUpdates.manual_agency_amount = updates.manualAgencyAmount;
+    if (updates.baseAmount !== undefined) dbUpdates.base_amount = updates.baseAmount;
 
     // 送信前に正規化（空文字を null に変換）
     const normalizedUpdates = this.normalizePayload(dbUpdates);

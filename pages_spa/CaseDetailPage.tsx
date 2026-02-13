@@ -84,10 +84,20 @@ const CaseDetailPage = () => {
   };
 
   const saveChanges = async () => {
-    if (caseData) {
-      await db.updateCase(caseData.id, editedCase, user);
-      setIsEditing(false);
-      navigate(0);
+    if (caseData && editedCase) {
+      try {
+        const result = await db.updateCase(caseData.id, editedCase, user);
+        if (result) {
+          setIsEditing(false);
+          alert('案件情報を更新しました。');
+          navigate(0);
+        } else {
+          alert('更新に失敗しました。入力内容を確認してください。');
+        }
+      } catch (err: any) {
+        console.error('Update error:', err);
+        alert('保存中にエラーが発生しました: ' + (err.message || 'Unknown error'));
+      }
     }
   };
 
