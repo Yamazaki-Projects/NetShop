@@ -1,3 +1,4 @@
+
 import { 
   User, Case, CaseStatus, UserRole, UserStatus, AgencyApplicationStatus, PlatformType, MallOpeningStatus
 } from '../types';
@@ -14,12 +15,32 @@ class DBService {
   }
 
   /**
-   * 日付文字列が空の場合は null を、それ以外はその値を返すヘルパー
-   * PostgreSQL の date 型に "" を送るとエラーになるのを防ぐ
+   * オブジェクト内の空文字列 "" を再帰的に null に変換するヘルパー。
+   * PostgreSQL の型制約エラー（date, numeric 等への "" 送信）を防止します。
    */
-  private toNullableDate(val: any): string | null {
-    if (val === undefined || val === null || val === '') return null;
-    return val;
+  private normalizePayload(data: any): any {
+    if (data === null || data === undefined) return null;
+    
+    // 文字列の場合、空文字なら null を返す
+    if (typeof data === 'string') {
+      return data.trim() === '' ? null : data;
+    }
+
+    // 配列の場合、各要素を正規化
+    if (Array.isArray(data)) {
+      return data.map(item => this.normalizePayload(item));
+    }
+
+    // オブジェクトの場合、各プロパティを正規化
+    if (typeof data === 'object') {
+      const normalized: any = {};
+      for (const key in data) {
+        normalized[key] = this.normalizePayload(data[key]);
+      }
+      return normalized;
+    }
+
+    return data;
   }
 
   /**
@@ -135,12 +156,12 @@ class DBService {
       representative_name: newCaseData.representativeName,
       representative_name_kana: newCaseData.representativeNameKana,
       corporate_number: newCaseData.corporateNumber,
-      established_date: this.toNullableDate(newCaseData.establishedDate), // Helper applied
+      established_date: newCaseData.establishedDate,
       zip_code: newCaseData.zipCode,
       address: newCaseData.address,
       rep_name: newCaseData.repName,
       rep_name_kana: newCaseData.repNameKana,
-      rep_birth_date: this.toNullableDate(newCaseData.repBirthDate), // Helper applied
+      rep_birth_date: newCaseData.repBirthDate,
       rep_zip_code: newCaseData.repZipCode,
       rep_address: newCaseData.repAddress,
       phone: newCaseData.phone,
@@ -148,7 +169,11 @@ class DBService {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    const { data, error } = await supabase.from('cases').insert([dbPayload]).select().single();
+
+    // 送信前に正規化（空文字を null に変換）
+    const normalizedPayload = this.normalizePayload(dbPayload);
+
+    const { data, error } = await supabase.from('cases').insert([normalizedPayload]).select().single();
     if (error) throw error;
     return data ? this.mapCase(data) : null;
   }
@@ -167,13 +192,13 @@ class DBService {
     if (updates.customerType) { dbUpdates.customer_type = updates.customerType; delete dbUpdates.customerType; }
     if (updates.companyName) { dbUpdates.company_name = updates.companyName; delete dbUpdates.companyName; }
     
-    // 日付型カラムの変換（establishedDate / repBirthDate が含まれている場合）
+    // プロパティ名のマッピング
     if ('establishedDate' in updates) { 
-      dbUpdates.established_date = this.toNullableDate(updates.establishedDate); 
+      dbUpdates.established_date = updates.establishedDate; 
       delete dbUpdates.establishedDate; 
     }
     if ('repBirthDate' in updates) { 
-      dbUpdates.rep_birth_date = this.toNullableDate(updates.repBirthDate); 
+      dbUpdates.rep_birth_date = updates.repBirthDate; 
       delete dbUpdates.repBirthDate; 
     }
 
@@ -181,9 +206,12 @@ class DBService {
     if (updates.manualAgencyAmount !== undefined) { dbUpdates.manual_agency_amount = updates.manualAgencyAmount; delete dbUpdates.manualAgencyAmount; }
     if (updates.baseAmount !== undefined) { dbUpdates.base_amount = updates.baseAmount; delete dbUpdates.baseAmount; }
 
+    // 送信前に正規化（空文字を null に変換）
+    const normalizedUpdates = this.normalizePayload(dbUpdates);
+
     const { data, error } = await supabase
       .from('cases')
-      .update(dbUpdates)
+      .update(normalizedUpdates)
       .eq('id', id)
       .select()
       .single();
