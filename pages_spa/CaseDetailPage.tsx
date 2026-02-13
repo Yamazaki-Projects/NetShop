@@ -372,8 +372,6 @@ const CaseDetailPage = () => {
                   <InfoRow label="顧客種別" value={caseData.customerType === 'corporation' ? '法人' : '個人事業主'} field="customerType" />
                   <InfoRow label="法人名/屋号" value={caseData.companyName} field="companyName" />
                   <InfoRow label="法人名/屋号ふりがな" value={caseData.companyNameKana} field="companyNameKana" />
-                  <InfoRow label="代表者名" value={caseData.representativeName} field="representativeName" />
-                  <InfoRow label="代表者名ふりがな" value={caseData.representativeNameKana} field="representativeNameKana" />
                   <InfoRow label="法人番号" value={caseData.corporateNumber} field="corporateNumber" />
                   <InfoRow label="設立年月日" value={caseData.establishedDate} field="establishedDate" isDate />
                   <InfoRow label="法人郵便番号" value={caseData.zipCode} field="zipCode" />

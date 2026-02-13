@@ -27,8 +27,6 @@ const CaseListPage = () => {
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
     companyName: '',
     companyNameKana: '',
-    representativeName: '',
-    representativeNameKana: '',
     corporateNumber: '',
     establishedDate: '',
     zipCode: '',
@@ -254,8 +252,6 @@ const CaseListPage = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                   <Input label="法人名/屋号" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} required />
                   <Input label="法人名/屋号ふりがな" value={formData.companyNameKana} onChange={e => setFormData({...formData, companyNameKana: e.target.value})} required />
-                  <Input label="代表者名" value={formData.representativeName} onChange={e => setFormData({...formData, representativeName: e.target.value})} required />
-                  <Input label="代表者名ふりがな" value={formData.representativeNameKana} onChange={e => setFormData({...formData, representativeNameKana: e.target.value})} required />
                   <Input label="法人番号 (13桁)" value={formData.corporateNumber} onChange={e => setFormData({...formData, corporateNumber: e.target.value})} maxLength={13} />
                   <Input label="設立年月日" type="date" value={formData.establishedDate} onChange={e => setFormData({...formData, establishedDate: e.target.value})} />
                   <Input label="法人郵便番号 (ハイフンなし)" value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} maxLength={7} />
