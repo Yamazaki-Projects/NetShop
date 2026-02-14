@@ -126,11 +126,11 @@ const CaseListPage = () => {
 
   const renderCustomerStatus = (email: string) => {
     const targetUser = allUsers.find(u => u.email === email);
-    if (!targetUser) return null;
-    if (targetUser.status === UserStatus.AGENCY) return <Badge color="var(--primary)">代理店</Badge>;
-    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">申請中</Badge>;
-    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
-    return <Badge color="#94a3b8">顧客</Badge>;
+    if (!targetUser) return <Badge color="#94a3b8">顧客</Badge>;
+    if (targetUser.status === UserStatus.AGENCY) return <Badge color="#1e293b">代理店</Badge>;
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">代理店申請中</Badge>;
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">代理店承認済</Badge>;
+    return <Badge color="#64748b">顧客</Badge>;
   };
 
   return (

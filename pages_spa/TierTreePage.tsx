@@ -3,74 +3,90 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { User, UserStatus, UserRole, AgencyApplicationStatus } from '../types';
+import { User, UserStatus, UserRole, AgencyApplicationStatus, Case } from '../types';
 import { Badge, Button } from '../components/UI';
 
-const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: { 
-  user: User; 
+// ノードの型定義（ユーザーまたは案件）
+type TreeElement = 
+  | { type: 'user'; data: User }
+  | { type: 'case'; data: Case };
+
+const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: { 
+  element: TreeElement; 
   level: number; 
   isAdmin: boolean; 
   currentUser: User; 
   allUsers: User[]; 
+  allCases: Case[];
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const navigate = useNavigate();
 
-  // 下位の紹介ユーザーを計算
-  const children = useMemo(() => {
-    return allUsers.filter(u => u.referrerId === user.id && u.id !== user.id);
-  }, [user, allUsers]);
+  // 子要素（紹介したユーザー + 紹介した案件）を計算
+  const children = useMemo((): TreeElement[] => {
+    if (element.type === 'case') return []; // 案件は末端ノード
 
-  const isSelf = currentUser.id === user.id;
+    const userId = element.data.id;
+    const subUsers: TreeElement[] = allUsers
+      .filter(u => u.referrerId === userId && u.id !== userId)
+      .map(u => ({ type: 'user', data: u }));
+    
+    const subCases: TreeElement[] = allCases
+      .filter(c => c.referrerId === userId)
+      .map(c => ({ type: 'case', data: c }));
 
-  // ステータス表示情報の判定
+    return [...subUsers, ...subCases];
+  }, [element, allUsers, allCases]);
+
+  const isSelf = element.type === 'user' && currentUser.id === element.data.id;
+
+  // ユーザーステータスから表示情報を取得する共通関数
+  const getStatusInfo = (targetUser?: User) => {
+    if (!targetUser) return { label: '顧客', color: '#64748b', icon: 'fa-user', bg: 'white' };
+    
+    if (targetUser.role === UserRole.ADMIN) {
+      return { label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.08)' };
+    }
+    
+    if (targetUser.status === UserStatus.AGENCY) {
+      return { label: '代理店', color: '#1e293b', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.05)' };
+    }
+    
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
+      return { label: '代理店承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.05)' };
+    }
+
+    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
+      return { label: '代理店申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.05)' };
+    }
+    
+    return { label: '顧客', color: '#64748b', icon: 'fa-user', bg: 'white' };
+  };
+
+  // 表示用情報の計算
   const getDisplayInfo = () => {
-    // 管理者ロールの場合
-    if (user.role === UserRole.ADMIN) {
-      return { 
-        label: '管理者', 
-        color: 'var(--primary)', 
-        icon: 'fa-crown', 
-        bg: 'rgba(79, 70, 229, 0.08)' 
-      };
-    }
-    
-    // 代理店（本登録済み）
-    if (user.status === UserStatus.AGENCY) {
-      return { 
-        label: '代理店', 
-        color: '#1e293b', 
-        icon: 'fa-user-tie', 
-        bg: 'rgba(30, 41, 59, 0.05)' 
-      };
-    }
-    
-    // 代理店承認済
-    if (user.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
-      return { 
-        label: '代理店承認済', 
-        color: '#0ea5e9', 
-        icon: 'fa-user-check', 
-        bg: 'rgba(14, 165, 233, 0.05)' 
+    if (element.type === 'case') {
+      const c = element.data;
+      // 案件のメールアドレスに紐づくユーザーを探す
+      const associatedUser = allUsers.find(u => u.email === c.email);
+      const statusInfo = getStatusInfo(associatedUser);
+      
+      return {
+        ...statusInfo,
+        name: c.companyName || c.repName || '名称未設定',
+        id: c.id,
+        icon: 'fa-briefcase', // 案件はブリーフケースアイコンで区別
+        isCase: true
       };
     }
 
-    // 代理店申請中
-    if (user.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
-      return { 
-        label: '代理店申請中', 
-        color: '#f59e0b', 
-        icon: 'fa-clock', 
-        bg: 'rgba(245, 158, 11, 0.05)' 
-      };
-    }
-    
-    // 顧客
-    return { 
-      label: '顧客', 
-      color: '#64748b', 
-      icon: 'fa-user', 
-      bg: 'white' 
+    const u = element.data;
+    const statusInfo = getStatusInfo(u);
+    return {
+      ...statusInfo,
+      name: u.name,
+      id: u.loginId,
+      isCase: false
     };
   };
 
@@ -84,16 +100,8 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
       paddingLeft: level === 0 ? 0 : '30px', 
       position: 'relative' 
     }}>
-      {/* 接続線 (L字) */}
       {level > 0 && (
-        <div style={{ 
-          position: 'absolute', 
-          left: '-2px', 
-          top: '24px', 
-          width: '32px', 
-          height: '2px', 
-          background: 'var(--border)' 
-        }}></div>
+        <div style={{ position: 'absolute', left: '-2px', top: '24px', width: '32px', height: '2px', background: 'var(--border)' }}></div>
       )}
 
       <div style={{ 
@@ -108,11 +116,12 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',
         zIndex: 1,
-        maxWidth: '580px'
+        maxWidth: '580px',
+        cursor: info.isCase ? 'pointer' : 'default'
       }}
       className="tree-node-hover"
+      onClick={() => info.isCase && navigate(`/cases/${element.data.id}`)}
       >
-        {/* 展開ボタン */}
         <div 
           onClick={(e) => {
             e.stopPropagation();
@@ -139,7 +148,6 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
           )}
         </div>
 
-        {/* アイコン */}
         <div style={{ 
           width: '40px', 
           height: '40px', 
@@ -155,14 +163,13 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
           <i className={`fa-solid ${info.icon}`}></i>
         </div>
 
-        {/* テキスト情報 */}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
             <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user.name}
+              {info.name}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)', background: 'var(--bg-main)', padding: '1px 6px', borderRadius: '4px', border: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
-              {user.loginId}
+              {info.id}
             </span>
             {isSelf && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>あなた</Badge>}
           </div>
@@ -172,28 +179,32 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
           </div>
         </div>
 
-        {/* 管理用アクション */}
-        {isAdmin && !isSelf && (
+        {(isAdmin || isSelf) && (
           <Button 
             variant="ghost" 
-            onClick={(e) => { e.stopPropagation(); navigate(`/agencies`); }} 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              if (info.isCase) navigate(`/cases/${element.data.id}`);
+              else navigate(isAdmin ? `/agencies` : `/cases`);
+            }} 
             style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px' }}
           >
-            管理
+            {info.isCase ? '詳細' : (isAdmin ? '管理' : '案件一覧')}
           </Button>
         )}
       </div>
 
       {isExpanded && children.length > 0 && (
         <div style={{ marginTop: '12px' }}>
-          {children.map((child) => (
+          {children.map((child, idx) => (
             <TreeNode 
-              key={child.id} 
-              user={child} 
+              key={child.type + child.data.id + idx} 
+              element={child} 
               level={level + 1} 
               isAdmin={isAdmin} 
               currentUser={currentUser}
               allUsers={allUsers}
+              allCases={allCases}
             />
           ))}
         </div>
@@ -205,14 +216,19 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers }: {
 const TierTreePage = () => {
   const { user } = useAppContext();
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allCases, setAllCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const u = await db.getUsers();
+        const [u, c] = await Promise.all([
+          db.getUsers(),
+          db.getAllCases()
+        ]);
         setAllUsers(u);
+        setAllCases(c);
       } catch (e) {
         console.error("Failed to load tree data", e);
       } finally {
@@ -222,16 +238,14 @@ const TierTreePage = () => {
     loadData();
   }, []);
 
-  const rootUsers = useMemo((): User[] => {
+  const rootElements = useMemo((): TreeElement[] => {
     if (!user) return [];
-    
-    // 管理者の場合は、トップレベルのユーザー（紹介者なし、または管理者自身）を表示
     if (user.role === UserRole.ADMIN) {
-      return allUsers.filter(u => !u.referrerId || u.role === UserRole.ADMIN);
+      return allUsers
+        .filter(u => !u.referrerId || u.role === UserRole.ADMIN)
+        .map(u => ({ type: 'user', data: u }));
     }
-    
-    // 一般ユーザーの場合は自分をトップに
-    return [user];
+    return [{ type: 'user', data: user }];
   }, [allUsers, user]);
 
   if (loading || !user) {
@@ -250,11 +264,10 @@ const TierTreePage = () => {
             ティアツリー <span style={{ color: 'var(--primary)' }}>.</span>
           </h1>
           <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px', fontSize: '1.1rem' }}>
-            代理店パートナーの組織構造を可視化します。
+            パートナーの組織構造と顧客の状況を可視化します。
           </p>
         </div>
         
-        {/* 凡例 */}
         <div style={{ 
           display: 'flex', 
           gap: '12px', 
@@ -273,6 +286,7 @@ const TierTreePage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9' }}><i className="fa-solid fa-user-check"></i> 承認済</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}><i className="fa-solid fa-clock"></i> 申請中</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b' }}><i className="fa-solid fa-user"></i> 顧客</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-sub)', borderLeft: '1px solid var(--border)', paddingLeft: '12px' }}><i className="fa-solid fa-briefcase"></i> 案件（顧客）</div>
         </div>
       </header>
 
@@ -286,14 +300,15 @@ const TierTreePage = () => {
         backgroundImage: 'radial-gradient(var(--border) 1px, transparent 1px)',
         backgroundSize: '30px 30px'
       }}>
-        {rootUsers.length > 0 ? rootUsers.map((rootUser) => (
+        {rootElements.length > 0 ? rootElements.map((root, idx) => (
           <TreeNode 
-            key={rootUser.id} 
-            user={rootUser} 
+            key={root.type + root.data.id + idx} 
+            element={root} 
             level={0} 
             isAdmin={user.role === UserRole.ADMIN} 
             currentUser={user}
             allUsers={allUsers}
+            allCases={allCases}
           />
         )) : (
           <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-sub)' }}>
