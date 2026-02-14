@@ -141,8 +141,8 @@ const CaseDetailPage = () => {
         <Badge color={color}>{status}</Badge>
       </div>
       {mall && (
-        <div style={{ width: '200px' }}>
-          <Select value={status} onChange={(e) => handleMallStatusChange(mall, e.target.value as MallOpeningStatus)} style={{ marginBottom: 0, height: '40px', fontSize: '0.85rem', fontWeight: 700 }}>
+        <div style={{ width: '260px' }}>
+          <Select value={status} onChange={(e) => handleMallStatusChange(mall, e.target.value as MallOpeningStatus)} style={{ marginBottom: 0, height: '44px', fontSize: '0.85rem', fontWeight: 700 }}>
             {Object.values(MallOpeningStatus).map(s => <option key={s} value={s}>{s}</option>)}
           </Select>
         </div>
@@ -255,6 +255,8 @@ const CaseDetailPage = () => {
                   <InfoRow label="法人名/屋号" value={caseData.companyName} field="companyName" />
                   <InfoRow label="法人名(かな)" value={caseData.companyNameKana} field="companyNameKana" />
                   <InfoRow label="代表者氏名" value={caseData.representativeName} field="representativeName" />
+                  <InfoRow label="代表者氏名(かな)" value={caseData.representativeNameKana} field="representativeNameKana" />
+                  <InfoRow label="代表者生年月日" value={caseData.repBirthDate} field="repBirthDate" isDate />
                   <InfoRow label="法人番号" value={caseData.corporateNumber} field="corporateNumber" />
                   <InfoRow label="設立年月日" value={caseData.establishedDate} field="establishedDate" isDate />
                   <InfoRow label="所在地郵便番号" value={caseData.zipCode} field="zipCode" />
@@ -262,7 +264,7 @@ const CaseDetailPage = () => {
                 </div>
               </Card>
               <div style={{marginTop: '32px'}}>
-                <Card title="代表者個人情報">
+                <Card title="担当者個人情報">
                   <div style={{ padding: '0 28px 28px' }}>
                     <InfoRow label="氏名(漢字)" value={caseData.repName} field="repName" />
                     <InfoRow label="氏名(かな)" value={caseData.repNameKana} field="repNameKana" />
