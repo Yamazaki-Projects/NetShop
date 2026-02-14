@@ -62,6 +62,7 @@ export const Card = ({ children, className = "", title, style }: { children?: Re
   </div>
 );
 
+// Updated onClick type to accept React.MouseEvent to allow event manipulation in consumers
 export const Button = ({ 
   children, 
   onClick, 
@@ -72,7 +73,7 @@ export const Button = ({
   style
 }: { 
   children?: React.ReactNode; 
-  onClick?: () => void; 
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void; 
   variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ghost'; 
   className?: string; 
   disabled?: boolean;
