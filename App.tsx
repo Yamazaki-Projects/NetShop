@@ -128,7 +128,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         
         <nav style={{ flex: 1, padding: '0 16px' }}>
           <SidebarLink to="/" icon="fa-house" label="ダッシュボード" active={location.pathname === '/'} />
-          <SidebarLink to="/cases" icon="fa-briefcase" label="案件管理" active={location.pathname.startsWith('/cases')} />
+          <SidebarLink to="/cases" icon="fa-briefcase" label="顧客管理" active={location.pathname.startsWith('/cases')} />
           <SidebarLink to="/tree" icon="fa-sitemap" label="ティアツリー" active={location.pathname === '/tree'} />
           {user.role === UserRole.ADMIN && (
             <>

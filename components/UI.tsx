@@ -40,9 +40,9 @@ export const StatusBadge = ({ status }: { status: CaseStatus }) => {
   );
 };
 
-// Added key to interface to avoid TS errors when Card is used within a map()
-export const Card = ({ children, className = "", title, style }: { children?: React.ReactNode, className?: string, title?: string, style?: React.CSSProperties, key?: React.Key }) => (
-  <div className={`card ${className}`} style={style}>
+// Added onClick prop to Card component to allow event manipulation (e.g., stopPropagation) in consumers
+export const Card = ({ children, className = "", title, style, onClick }: { children?: React.ReactNode, className?: string, title?: string, style?: React.CSSProperties, key?: React.Key, onClick?: React.MouseEventHandler<HTMLDivElement> }) => (
+  <div className={`card ${className}`} style={style} onClick={onClick}>
     {title && (
       <div style={{ 
         padding: '24px 28px', 
