@@ -159,7 +159,7 @@ const CaseDetailPage = () => {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px' }}>
         <div style={{ textAlign: 'left' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Link to="/cases" style={{ color: 'var(--text-sub)', textDecoration: 'none', fontWeight: 800, fontSize: '0.85rem' }}><i className="fa-solid fa-arrow-left"></i> 一覧に戻る</Link>
+            <Link to="/cases" style={{ color: 'var(--text-sub)', textDecoration: 'none', fontWeight: 800, fontSize: '0.85rem' }}><i className="fa-solid fa-arrow-left"></i> 顧客一覧に戻る</Link>
             <span style={{ color: 'var(--border)' }}>/</span>
             <span style={{ color: 'var(--text-sub)', fontWeight: 800, fontSize: '0.85rem' }}>顧客ID: {caseData.id}</span>
           </div>
@@ -193,21 +193,32 @@ const CaseDetailPage = () => {
               <StatusSection title="楽天市場 開設状況" status={caseData.mallProgress.rakuten} mall="rakuten" color="#bf0000" />
               <Card title="楽天アカウント情報">
                 <div style={{ padding: '0 28px 28px' }}>
-                  <InfoRow label="RMS申請用ID" value={caseData.rakutenInfo?.applyId} field="applyId" group="rakutenInfo" />
-                  <InfoRow label="RMS申請用Pass" value={caseData.rakutenInfo?.applyPass} field="applyPass" group="rakutenInfo" />
+                  <InfoRow label="申込ID" value={caseData.rakutenInfo?.applyId} field="applyId" group="rakutenInfo" />
+                  <InfoRow label="申込パスワード" value={caseData.rakutenInfo?.applyPass} field="applyPass" group="rakutenInfo" />
                   <InfoRow label="R-Login ID" value={caseData.rakutenInfo?.rLoginId} field="rLoginId" group="rakutenInfo" />
-                  <InfoRow label="R-Login Pass" value={caseData.rakutenInfo?.rLoginPass} field="rLoginPass" group="rakutenInfo" />
-                  <InfoRow label="あんしんメルアドID" value={caseData.rakutenInfo?.personalId} field="personalId" group="rakutenInfo" />
-                  <InfoRow label="あんしんメルアドPass" value={caseData.rakutenInfo?.personalPass} field="personalPass" group="rakutenInfo" />
-                  <InfoRow label="楽天ビルペイID" value={caseData.rakutenInfo?.billpayId} field="billpayId" group="rakutenInfo" />
-                  <InfoRow label="楽天ビルペイPass" value={caseData.rakutenInfo?.billpayPass} field="billpayPass" group="rakutenInfo" />
+                  <InfoRow label="R-Login パスワード" value={caseData.rakutenInfo?.rLoginPass} field="rLoginPass" group="rakutenInfo" />
+                  <InfoRow label="個人ID" value={caseData.rakutenInfo?.personalId} field="personalId" group="rakutenInfo" />
+                  <InfoRow label="個人パスワード" value={caseData.rakutenInfo?.personalPass} field="personalPass" group="rakutenInfo" />
+                  <InfoRow label="billpay ID" value={caseData.rakutenInfo?.billpayId} field="billpayId" group="rakutenInfo" />
+                  <InfoRow label="billpay パスワード" value={caseData.rakutenInfo?.billpayPass} field="billpayPass" group="rakutenInfo" />
                 </div>
               </Card>
+
               <div style={{marginTop: '32px'}}>
-                <Card title="関連サービス (楽天市場用)">
+                <Card title="050番号 (Subline)">
                   <div style={{ padding: '0 28px 28px' }}>
-                    <InfoRow label="050番号 (Subline)" value={caseData.subline?.number050} field="number050" group="subline" />
-                    <InfoRow label="転送メール (Email.jp)" value={caseData.emailJp?.email} field="email" group="emailJp" />
+                    <InfoRow label="050番号" value={caseData.subline?.number050} field="number050" group="subline" />
+                    <InfoRow label="ログインID" value={caseData.subline?.loginId} field="loginId" group="subline" />
+                    <InfoRow label="パスワード" value={caseData.subline?.password} field="password" group="subline" />
+                  </div>
+                </Card>
+              </div>
+
+              <div style={{marginTop: '32px'}}>
+                <Card title="e-mail.jp">
+                  <div style={{ padding: '0 28px 28px' }}>
+                    <InfoRow label="メールアドレス" value={caseData.emailJp?.email} field="email" group="emailJp" />
+                    <InfoRow label="パスワード" value={caseData.emailJp?.password} field="password" group="emailJp" />
                   </div>
                 </Card>
               </div>
