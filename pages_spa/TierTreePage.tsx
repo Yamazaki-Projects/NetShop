@@ -69,12 +69,20 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
     if (u.role === UserRole.ADMIN) {
       return { name: u.name, id: u.loginId, label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.08)', borderStyle: 'solid' };
     }
+    
+    // ステータス詳細化
     if (u.status === UserStatus.AGENCY) {
       return { name: u.name, id: u.loginId, label: '代理店', color: '#1e293b', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.05)', borderStyle: 'solid' };
     }
+    
+    if (u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
+      return { name: u.name, id: u.loginId, label: '代理店承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.05)', borderStyle: 'solid' };
+    }
+
     if (u.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
       return { name: u.name, id: u.loginId, label: '代理店申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.05)', borderStyle: 'solid' };
     }
+    
     return { name: u.name, id: u.loginId, label: '顧客', color: '#64748b', icon: 'fa-user', bg: 'white', borderStyle: 'solid' };
   };
 
@@ -275,16 +283,21 @@ const TierTreePage = () => {
         {/* 凡例 */}
         <div style={{ 
           display: 'flex', 
-          gap: '16px', 
-          padding: '12px 24px', 
+          gap: '12px', 
+          padding: '12px 20px', 
           background: 'var(--bg-card)', 
           borderRadius: '16px', 
           border: '1px solid var(--border)',
-          fontSize: '0.75rem',
+          fontSize: '0.7rem',
           fontWeight: 800,
-          boxShadow: 'var(--shadow-sm)'
+          boxShadow: 'var(--shadow-sm)',
+          flexWrap: 'wrap',
+          maxWidth: '500px',
+          justifyContent: 'flex-end'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1e293b' }}><i className="fa-solid fa-user-tie"></i> 代理店</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9' }}><i className="fa-solid fa-user-check"></i> 承認済</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}><i className="fa-solid fa-clock"></i> 申請中</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b' }}><i className="fa-solid fa-user"></i> 顧客</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent)' }}><i className="fa-solid fa-briefcase"></i> 案件</div>
         </div>
