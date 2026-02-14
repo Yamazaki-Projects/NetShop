@@ -141,8 +141,8 @@ const CaseDetailPage = () => {
         <Badge color={color}>{status}</Badge>
       </div>
       {mall && (
-        <div style={{ width: '260px' }}>
-          <Select value={status} onChange={(e) => handleMallStatusChange(mall, e.target.value as MallOpeningStatus)} style={{ marginBottom: 0, height: '44px', fontSize: '0.85rem', fontWeight: 700 }}>
+        <div style={{ width: '320px' }}>
+          <Select value={status} onChange={(e) => handleMallStatusChange(mall, e.target.value as MallOpeningStatus)} style={{ marginBottom: 0, height: '48px', fontSize: '0.9rem', fontWeight: 700, padding: '0 12px' }}>
             {Object.values(MallOpeningStatus).map(s => <option key={s} value={s}>{s}</option>)}
           </Select>
         </div>
