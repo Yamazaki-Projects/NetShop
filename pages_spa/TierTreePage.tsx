@@ -42,32 +42,31 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
 
   // ユーザーステータスから表示情報を取得する共通関数
   const getStatusInfo = (targetUser?: User) => {
-    if (!targetUser) return { label: '顧客', color: '#64748b', icon: 'fa-user', bg: 'white' };
+    if (!targetUser) return { label: '顧客', color: '#94a3b8', icon: 'fa-user', bg: 'var(--bg-card)' };
     
     if (targetUser.role === UserRole.ADMIN) {
-      return { label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.08)' };
+      return { label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.1)' };
     }
     
     if (targetUser.status === UserStatus.AGENCY) {
-      return { label: '代理店', color: '#1e293b', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.05)' };
+      return { label: '代理店', color: 'var(--text-main)', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.1)' };
     }
     
     if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
-      return { label: '代理店承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.05)' };
+      return { label: '承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.1)' };
     }
 
     if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
-      return { label: '代理店申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.05)' };
+      return { label: '申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.1)' };
     }
     
-    return { label: '顧客', color: '#64748b', icon: 'fa-user', bg: 'white' };
+    return { label: '顧客', color: '#94a3b8', icon: 'fa-user', bg: 'var(--bg-card)' };
   };
 
   // 表示用情報の計算
   const getDisplayInfo = () => {
     if (element.type === 'case') {
       const c = element.data;
-      // 案件のメールアドレスに紐づくユーザーを探す
       const associatedUser = allUsers.find(u => u.email === c.email);
       const statusInfo = getStatusInfo(associatedUser);
       
@@ -75,7 +74,7 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
         ...statusInfo,
         name: c.companyName || c.repName || '名称未設定',
         id: c.id,
-        icon: 'fa-briefcase', // 案件はブリーフケースアイコンで区別
+        icon: 'fa-briefcase',
         isCase: true
       };
     }
@@ -96,12 +95,12 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
     <div style={{ 
       marginLeft: level === 0 ? 0 : '40px', 
       marginBottom: '12px', 
-      borderLeft: level === 0 ? 'none' : '2px solid var(--border)', 
+      borderLeft: level === 0 ? 'none' : '2.5px solid var(--border)', 
       paddingLeft: level === 0 ? 0 : '30px', 
       position: 'relative' 
     }}>
       {level > 0 && (
-        <div style={{ position: 'absolute', left: '-2px', top: '24px', width: '32px', height: '2px', background: 'var(--border)' }}></div>
+        <div style={{ position: 'absolute', left: '-2.5px', top: '24px', width: '32px', height: '2.5px', background: 'var(--border)' }}></div>
       )}
 
       <div style={{ 
@@ -109,10 +108,10 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
         alignItems: 'center', 
         gap: '16px', 
         padding: '14px 18px', 
-        background: isSelf ? 'rgba(79, 70, 229, 0.04)' : info.bg, 
+        background: isSelf ? 'rgba(79, 70, 229, 0.1)' : info.bg, 
         borderRadius: '16px',
         border: isSelf ? '2.5px solid var(--primary)' : `1.5px solid var(--border)`,
-        boxShadow: isSelf ? '0 10px 15px -3px rgba(79, 70, 229, 0.15)' : 'var(--shadow-sm)',
+        boxShadow: isSelf ? '0 10px 15px -3px rgba(79, 70, 229, 0.2)' : 'var(--shadow-sm)',
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',
         zIndex: 1,
@@ -134,7 +133,7 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
             alignItems: 'center', 
             justifyContent: 'center', 
             cursor: children.length > 0 ? 'pointer' : 'default',
-            color: children.length > 0 ? 'var(--primary)' : 'var(--border)',
+            color: children.length > 0 ? 'var(--primary)' : 'var(--text-sub)',
             background: 'var(--bg-main)',
             borderRadius: '8px',
             border: '1.5px solid var(--border)',
@@ -144,7 +143,7 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
           {children.length > 0 ? (
             <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ fontSize: '0.7rem' }}></i>
           ) : (
-            <div style={{ width: '4px', height: '4px', background: 'var(--border)', borderRadius: '50%' }}></div>
+            <div style={{ width: '4px', height: '4px', background: 'var(--text-sub)', borderRadius: '50%', opacity: 0.3 }}></div>
           )}
         </div>
 
@@ -152,13 +151,14 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
           width: '40px', 
           height: '40px', 
           borderRadius: '12px', 
-          background: isSelf ? 'var(--grad-primary)' : info.color + '11',
+          background: isSelf ? 'var(--grad-primary)' : 'var(--bg-main)',
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
           color: isSelf ? 'white' : info.color,
           fontSize: '1.1rem',
-          boxShadow: isSelf ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none'
+          boxShadow: isSelf ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none',
+          border: isSelf ? 'none' : '1px solid var(--border)'
         }}>
           <i className={`fa-solid ${info.icon}`}></i>
         </div>
@@ -187,9 +187,9 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
               if (info.isCase) navigate(`/cases/${element.data.id}`);
               else navigate(isAdmin ? `/agencies` : `/cases`);
             }} 
-            style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px' }}
+            style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)' }}
           >
-            {info.isCase ? '詳細' : (isAdmin ? '管理' : '案件一覧')}
+            {info.isCase ? '詳細' : (isAdmin ? '管理' : '顧客一覧')}
           </Button>
         )}
       </div>
@@ -282,10 +282,10 @@ const TierTreePage = () => {
           maxWidth: '550px',
           justifyContent: 'flex-end'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1e293b' }}><i className="fa-solid fa-user-tie"></i> 代理店</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-main)' }}><i className="fa-solid fa-user-tie"></i> 代理店</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9' }}><i className="fa-solid fa-user-check"></i> 承認済</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}><i className="fa-solid fa-clock"></i> 申請中</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b' }}><i className="fa-solid fa-user"></i> 顧客</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8' }}><i className="fa-solid fa-user"></i> 顧客</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-sub)', borderLeft: '1px solid var(--border)', paddingLeft: '12px' }}><i className="fa-solid fa-briefcase"></i> 案件（顧客）</div>
         </div>
       </header>
@@ -321,7 +321,7 @@ const TierTreePage = () => {
       <style>{`
         .tree-node-hover:hover {
           transform: translateX(8px);
-          box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.08) !important;
+          box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.2) !important;
           border-color: var(--primary) !important;
         }
       `}</style>
