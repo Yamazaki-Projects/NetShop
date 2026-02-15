@@ -80,8 +80,26 @@ class DBService {
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
     const rate = await this.calculateRate(actor.id);
+    
+    // 顧客IDの連番生成ロジック (PA0001〜)
+    const { data: lastCases, error: fetchError } = await supabase
+      .from('cases')
+      .select('id')
+      .like('id', 'PA%')
+      .order('id', { ascending: false })
+      .limit(1);
+
+    let nextId = 'PA0001';
+    if (!fetchError && lastCases && lastCases.length > 0) {
+      const lastIdStr = lastCases[0].id;
+      const currentNum = parseInt(lastIdStr.replace('PA', ''), 10);
+      if (!isNaN(currentNum)) {
+        nextId = `PA${String(currentNum + 1).padStart(4, '0')}`;
+      }
+    }
+
     const dbPayload = {
-      id: `PA${Math.floor(1000 + Math.random() * 9000)}`, // 顧客ID風のフォーマット
+      id: nextId,
       agency_id: actor.id,
       agency_name: actor.name,
       referrer_id: actor.id,
@@ -162,14 +180,12 @@ class DBService {
   }
 
   async applyForAgencyByCase(caseData: Case, actor: User): Promise<{ ok: boolean }> {
-    // 既存ユーザーを検索
     let { data: existingUser } = await supabase.from('users').select('*').eq('email', caseData.email).maybeSingle();
     
     if (existingUser) {
       const { error } = await supabase.from('users').update({ agency_application_status: AgencyApplicationStatus.PENDING }).eq('id', existingUser.id);
       return { ok: !error };
     } else {
-      // ユーザーがいない場合は新規作成（ダミーIDでログイン不可、承認後にパスワード設定させる）
       const newUser = {
         id: crypto.randomUUID(),
         login_id: caseData.id,
@@ -195,7 +211,6 @@ class DBService {
   }
 
   async completeRegistration(loginId: string, password: string): Promise<{ ok: boolean }> {
-    // ここではパスワードはsupabase auth側で設定される想定
     const { error } = await supabase.from('users').update({ status: UserStatus.AGENCY, role: UserRole.AGENCY }).eq('login_id', loginId);
     return { ok: !error };
   }
