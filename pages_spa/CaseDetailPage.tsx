@@ -28,14 +28,14 @@ const CaseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [applicationLoading, setApplicationLoading] = useState(false);
 
-  // データ再取得用
   const loadData = useCallback(async () => {
     if (!id) return;
     try {
       const c = await db.getCaseById(id);
       if (c) {
         setCaseData(c);
-        const u = await db.getUserByEmail(c.email);
+        // 重要: 紐付けはメールアドレスではなく、顧客ID (c.id = users.login_id) で行う
+        const u = await db.getUserByLoginId(c.id);
         setCustomerUser(u);
       }
     } catch (err) {
@@ -66,7 +66,7 @@ const CaseDetailPage = () => {
     console.log("handleApplyForAgency triggered", { customerUser, caseData });
     
     if (!customerUser) {
-      alert(`診断エラー:\nこの案件のメールアドレス「${caseData.email}」に一致するユーザーレコードがusersテーブルに見つかりません。\n\n確認事項:\n1. usersテーブルに「email: ${caseData.email}」の行が存在するか\n2. 前後に不要なスペースが含まれていないか\n3. RLS設定によりアクセスが拒否されていないか`);
+      alert(`診断エラー:\n顧客ID「${caseData.id}」に一致するユーザーレコードがusersテーブルに見つかりません。\n\n確認事項:\n1. usersテーブルに「login_id: ${caseData.id}」の行が存在するか\n2. RLS設定によりアクセスが拒否されていないか`);
       return;
     }
     
@@ -75,7 +75,7 @@ const CaseDetailPage = () => {
       const res = await db.applyForAgency(customerUser.loginId);
       if (res.ok) {
         alert('代理店昇格申請を送信しました。管理者の承認をお待ちください。');
-        await loadData(); // ページリロードせずデータを再取得
+        await loadData();
       } else {
         const errorMsg = res.error?.message || "更新された行がありません。";
         alert(`申請に失敗しました。\n理由: ${errorMsg}\n\nヒント: RLS(行セキュリティ)で、代理店によるusersテーブルの更新が許可されているか確認してください。`);

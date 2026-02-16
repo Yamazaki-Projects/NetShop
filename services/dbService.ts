@@ -51,7 +51,6 @@ class DBService {
   async login(loginId: string, pass: string): Promise<User | null> {
     const email = this.toInternalEmail(loginId);
     try {
-      // 1. Supabase Auth で認証
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: pass });
       if (authError || !authData.user) {
         console.error("Auth error:", authError);
@@ -60,13 +59,11 @@ class DBService {
       
       const authUid = authData.user.id;
 
-      // 2. auth_uid でプロフィールを検索
       let { data: profile } = await supabase.from('users')
         .select('*')
         .eq('auth_uid', authUid)
         .maybeSingle();
 
-      // 3. auth_uid で見つからない場合（初回ログイン時など）、login_id で検索して紐付け
       if (!profile) {
         const { data: legacyProfile } = await supabase.from('users')
           .select('*')
@@ -74,7 +71,6 @@ class DBService {
           .maybeSingle();
 
         if (legacyProfile) {
-          // auth_uid を更新して紐付け
           const { data: updatedProfile, error: updateError } = await supabase.from('users')
             .update({ auth_uid: authUid })
             .eq('id', legacyProfile.id)
@@ -255,6 +251,16 @@ class DBService {
     const { data, error } = await supabase.from('users').select('*').eq('email', email.trim()).maybeSingle();
     if (error) {
       console.error("DB Error fetching user by email:", error);
+      return null;
+    }
+    return data ? this.mapUser(data) : null;
+  }
+
+  async getUserByLoginId(loginId: string): Promise<User | null> {
+    if (!loginId) return null;
+    const { data, error } = await supabase.from('users').select('*').eq('login_id', loginId.trim()).maybeSingle();
+    if (error) {
+      console.error("DB Error fetching user by login_id:", error);
       return null;
     }
     return data ? this.mapUser(data) : null;
