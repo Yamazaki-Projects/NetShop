@@ -11,6 +11,15 @@ class DBService {
     return `${trimmedId}@net-shop.com`;
   }
 
+  private generateRandomCode(length: number = 8): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 読み間違えやすい I, O, 0, 1 を除外
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
   private normalizePayload(data: any): any {
     if (data === null || data === undefined) return null;
     if (typeof data === 'string') return data.trim() === '' ? null : data;
@@ -108,7 +117,6 @@ class DBService {
     const { data: caseResult, error: caseError } = await supabase.from('cases').insert([this.normalizePayload(dbPayload)]).select().single();
     if (caseError) throw caseError;
 
-    // 案件作成時は「未申請」の顧客としてユーザーを作成
     const newUser = {
       id: crypto.randomUUID(),
       login_id: nextId,
@@ -117,7 +125,7 @@ class DBService {
       role: UserRole.AGENCY,
       status: UserStatus.CUSTOMER,
       referrer_id: actor.id,
-      agency_application_status: AgencyApplicationStatus.NONE, // 最初は未申請
+      agency_application_status: AgencyApplicationStatus.NONE,
       created_at: new Date().toISOString()
     };
     await supabase.from('users').insert([newUser]);
@@ -160,9 +168,14 @@ class DBService {
   }
 
   async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
+    const code = this.generateRandomCode();
     const { error } = await supabase
       .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
+      .update({ 
+        agency_application_status: AgencyApplicationStatus.APPROVED,
+        registration_code: code,
+        registration_code_used_at: null 
+      })
       .eq('login_id', loginId);
     return { ok: !error, message: error?.message };
   }
@@ -173,6 +186,19 @@ class DBService {
       .update({ agency_application_status: AgencyApplicationStatus.NONE })
       .eq('login_id', loginId);
     return { ok: !error, message: error?.message };
+  }
+
+  async reissueRegistrationCode(loginId: string): Promise<{ ok: boolean, code?: string }> {
+    const newCode = this.generateRandomCode();
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        registration_code: newCode,
+        registration_code_used_at: null 
+      })
+      .eq('login_id', loginId)
+      .is('registration_code_used_at', null); // 使用済みの場合は再発行不可
+    return { ok: !error, code: newCode };
   }
 
   async getApprovedCount(userId: string): Promise<number> {
@@ -199,23 +225,34 @@ class DBService {
     return data ? this.mapUser(data) : null;
   }
 
-  async checkRegistrationEligibility(loginId: string): Promise<{ ok: boolean, reason?: string }> {
+  async checkRegistrationEligibility(loginId: string, registrationCode: string): Promise<{ ok: boolean, reason?: string, email?: string }> {
     const { data: user } = await supabase.from('users').select('*').eq('login_id', loginId).maybeSingle();
     if (!user) return { ok: false, reason: 'not_found' };
     if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
     if (user.agency_application_status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
-    return { ok: true };
+    if (user.registration_code !== registrationCode) return { ok: false, reason: 'invalid_code' };
+    if (user.registration_code_used_at) return { ok: false, reason: 'code_used' };
+    
+    return { ok: true, email: user.email };
   }
 
-  async completeRegistration(loginId: string, password: string): Promise<{ ok: boolean }> {
+  async completeRegistration(loginId: string, registrationCode: string, password: string): Promise<{ ok: boolean }> {
+    // 1. 再度バリデーション
+    const check = await this.checkRegistrationEligibility(loginId, registrationCode);
+    if (!check.ok) throw new Error(check.reason);
+
     const email = this.toInternalEmail(loginId);
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+    
+    // 2. Supabase Auth への登録
+    const { data: authUser, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) throw signUpError;
 
+    // 3. users テーブルの更新
     const { error } = await supabase.from('users').update({ 
-      id: data.user?.id, 
+      id: authUser.user?.id, 
       status: UserStatus.AGENCY, 
-      role: UserRole.AGENCY 
+      role: UserRole.AGENCY,
+      registration_code_used_at: new Date().toISOString()
     }).eq('login_id', loginId);
     
     return { ok: !error };
@@ -232,6 +269,8 @@ class DBService {
       status: u.status as UserStatus, referrerId: u.referrer_id,
       agencyApplicationStatus: u.agency_application_status as AgencyApplicationStatus,
       manualRateOverride: u.manual_rate_override, manualBaseAmountOverride: u.manual_base_amount_override,
+      registrationCode: u.registration_code,
+      registrationCodeUsedAt: u.registration_code_used_at,
       createdAt: u.created_at
     };
   }

@@ -2,19 +2,22 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { User, UserRole, AgencyApplicationStatus } from '../types';
+import { User, UserRole, UserStatus, AgencyApplicationStatus } from '../types';
 import { Card, Button, Badge } from '../components/UI';
 
 const AgencyApprovalPage = () => {
   const { user: currentUser } = useAppContext();
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
+  const [approvedUsers, setApprovedUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved'>('pending');
 
   const loadData = async () => {
     setLoading(true);
-    const data = await db.getPendingApplications();
-    setPendingUsers(data);
+    const all = await db.getUsers();
+    setPendingUsers(all.filter(u => u.agencyApplicationStatus === AgencyApplicationStatus.PENDING));
+    setApprovedUsers(all.filter(u => u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED && u.status === UserStatus.CUSTOMER));
     setLoading(false);
   };
 
@@ -25,11 +28,11 @@ const AgencyApprovalPage = () => {
   }, [currentUser]);
 
   const handleApprove = async (customerId: string) => {
-    if (!window.confirm(`顧客ID: ${customerId} の代理店昇格を承認しますか？`)) return;
+    if (!window.confirm(`顧客ID: ${customerId} の代理店昇格を承認しますか？承認と同時に登録コードが発行されます。`)) return;
     setActionLoading(customerId);
     const result = await db.approveApplication(customerId);
     if (result.ok) {
-      alert('承認しました。対象の顧客IDで本登録が可能になります。');
+      alert('承認完了しました。登録コードが生成されました。');
       loadData();
     } else {
       alert(result.message || 'エラーが発生しました。');
@@ -37,81 +40,72 @@ const AgencyApprovalPage = () => {
     setActionLoading(null);
   };
 
-  const handleReject = async (customerId: string) => {
-    if (!window.confirm(`顧客ID: ${customerId} の申請を却下しますか？`)) return;
-    setActionLoading(customerId);
-    const result = await db.rejectApplication(customerId);
-    if (result.ok) {
-      alert('却下しました。');
-      loadData();
-    } else {
-      alert(result.message || 'エラーが発生しました。');
-    }
-    setActionLoading(null);
-  };
-
-  if (currentUser?.role !== UserRole.ADMIN) {
-    return <div style={{ padding: '48px', textAlign: 'center' }}>アクセス権限がありません。</div>;
-  }
+  if (currentUser?.role !== UserRole.ADMIN) return null;
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }} className="animate-fade-in">
+    <div style={{ maxWidth: '1100px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>代理店申請承認</h1>
-        <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>パートナー各社からの代理店昇格申請を管理します。</p>
+        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)' }}>代理店昇格 承認管理</h1>
+        <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>パートナー各社からの昇格申請の確認と、登録コードの発行状況を管理します。</p>
       </header>
 
-      <Card title={`未処理の申請 (${pendingUsers.length})`}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
+        <button onClick={() => setActiveTab('pending')} style={{ padding: '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, color: activeTab === 'pending' ? 'var(--primary)' : 'var(--text-sub)', borderBottom: activeTab === 'pending' ? '4px solid var(--primary)' : '4px solid transparent' }}>
+          未処理の申請 ({pendingUsers.length})
+        </button>
+        <button onClick={() => setActiveTab('approved')} style={{ padding: '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, color: activeTab === 'approved' ? 'var(--accent)' : 'var(--text-sub)', borderBottom: activeTab === 'approved' ? '4px solid var(--accent)' : '4px solid transparent' }}>
+          承認済み/未登録 ({approvedUsers.length})
+        </button>
+      </div>
+
+      <Card title={activeTab === 'pending' ? "昇格申請一覧" : "承認済み（登録待ち）一覧"}>
         {loading ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-sub)' }}>
-            <i className="fa-solid fa-spinner fa-spin fa-2x"></i>
-          </div>
-        ) : pendingUsers.length === 0 ? (
+          <div style={{ padding: '60px', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+        ) : (activeTab === 'pending' ? pendingUsers : approvedUsers).length === 0 ? (
           <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-sub)' }}>
-            <i className="fa-solid fa-clipboard-check" style={{ fontSize: '3rem', marginBottom: '20px', opacity: 0.2 }}></i>
-            <p style={{ fontWeight: 700 }}>現在、未処理の申請はありません。</p>
+            <p style={{ fontWeight: 700 }}>表示するデータがありません。</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ minWidth: '800px' }}>
+            <table>
               <thead>
                 <tr>
                   <th className="align-left">顧客ID</th>
                   <th className="align-left">氏名/屋号</th>
-                  <th className="align-left">申請日時</th>
-                  <th className="align-right">アクション</th>
+                  {activeTab === 'approved' && <th className="align-center">登録コード</th>}
+                  <th className="align-right">{activeTab === 'pending' ? '申請日' : '承認日'}</th>
+                  <th className="align-right">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingUsers.map(user => (
+                {(activeTab === 'pending' ? pendingUsers : approvedUsers).map(user => (
                   <tr key={user.id}>
-                    <td className="align-left">
-                      <Badge color="var(--primary)" style={{ fontWeight: 800 }}>{user.loginId}</Badge>
-                    </td>
+                    <td className="align-left"><Badge color="var(--primary)">{user.loginId}</Badge></td>
                     <td className="align-left">
                       <div style={{ fontWeight: 800 }}>{user.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>{user.email}</div>
                     </td>
-                    <td className="align-left" style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
-                      {new Date(user.createdAt).toLocaleString()}
+                    {activeTab === 'approved' && (
+                      <td className="align-center">
+                        <div style={{ background: '#f0f9ff', padding: '4px 12px', borderRadius: '8px', border: '1px solid #bae6fd', color: '#0369a1', fontWeight: 900, fontFamily: 'monospace', fontSize: '1.1rem' }}>
+                          {user.registrationCode}
+                        </div>
+                      </td>
+                    )}
+                    <td className="align-right" style={{ color: 'var(--text-sub)', fontSize: '0.85rem' }}>
+                      {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="align-right">
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <Button 
-                          variant="ghost" 
-                          onClick={() => handleReject(user.loginId)}
-                          disabled={!!actionLoading}
-                          style={{ color: '#ef4444', border: '1px solid #fee2e2' }}
-                        >
-                          却下
-                        </Button>
-                        <Button 
-                          onClick={() => handleApprove(user.loginId)}
-                          disabled={!!actionLoading}
-                        >
-                          {actionLoading === user.loginId ? <i className="fa-solid fa-spinner fa-spin"></i> : '承認する'}
-                        </Button>
-                      </div>
+                      {activeTab === 'pending' ? (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <Button variant="ghost" style={{ color: '#ef4444' }}>却下</Button>
+                          <Button onClick={() => handleApprove(user.loginId)} disabled={!!actionLoading}>
+                            {actionLoading === user.loginId ? <i className="fa-solid fa-spinner fa-spin"></i> : '承認する'}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button variant="ghost" style={{ border: '1px solid var(--border)' }} onClick={() => db.reissueRegistrationCode(user.loginId).then(loadData)}>再発行</Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -120,15 +114,6 @@ const AgencyApprovalPage = () => {
           </div>
         )}
       </Card>
-
-      <div style={{ marginTop: '40px', padding: '24px', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '12px' }}>承認後の流れ</h3>
-        <ul style={{ fontSize: '0.85rem', color: 'var(--text-sub)', fontWeight: 600, lineHeight: 1.8, paddingLeft: '20px' }}>
-          <li>承認されると、対象の顧客IDは「登録可能」な状態になります。</li>
-          <li>顧客（または担当代理店）は、新規代理店登録画面で顧客IDを入力し、パスワードを設定できるようになります。</li>
-          <li>パスワード設定が完了すると、自動的に「代理店」ステータスへ移行し、システムへのログインが可能になります。</li>
-        </ul>
-      </div>
     </div>
   );
 };

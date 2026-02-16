@@ -62,6 +62,8 @@ export interface User {
   isDeletionPending?: boolean;
   manualRateOverride?: number; 
   manualBaseAmountOverride?: number;
+  registrationCode?: string; // 追加: 登録コード
+  registrationCodeUsedAt?: string | null; // 追加: コード使用日時
   createdAt: string;
 }
 

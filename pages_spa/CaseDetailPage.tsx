@@ -60,15 +60,6 @@ const CaseDetailPage = () => {
 
   const isAdmin = user.role === UserRole.ADMIN;
 
-  const handleTaskToggle = async (taskId: string, currentStatus: TaskStatus) => {
-    const statuses: TaskStatus[] = [TaskStatus.TODO, TaskStatus.DOING, TaskStatus.WAITING, TaskStatus.DONE];
-    const nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
-    await db.updateCase(caseData.id, { 
-      tasks: caseData.tasks.map(t => t.id === taskId ? { ...t, status: statuses[nextIndex] } : t)
-    }, user);
-    navigate(0);
-  };
-
   const handleApplyForAgency = async () => {
     if (!customerUser) return;
     setApplicationLoading(true);
@@ -78,6 +69,15 @@ const CaseDetailPage = () => {
       navigate(0);
     }
     setApplicationLoading(false);
+  };
+
+  const handleReissueCode = async () => {
+    if (!customerUser || !window.confirm('新しい登録コードを発行しますか？以前のコードは無効になります。')) return;
+    const res = await db.reissueRegistrationCode(customerUser.loginId);
+    if (res.ok) {
+      alert('登録コードを再発行しました。');
+      navigate(0);
+    }
   };
 
   const handleMallStatusChange = async (mall: 'rakuten' | 'yahoo' | 'aupay', status: MallOpeningStatus) => {
@@ -145,7 +145,9 @@ const CaseDetailPage = () => {
 
   const agencyAmount = caseData.isManualAdjustment ? (caseData.manualAgencyAmount || 0) : (caseData.baseAmount * caseData.appliedRate);
   const isRegisteredAgency = customerUser?.status === UserStatus.AGENCY;
-  const inviteUrl = `${window.location.origin}/#/register?id=${caseData.id}`;
+  const showCode = customerUser?.agencyApplicationStatus === AgencyApplicationStatus.APPROVED && 
+                   customerUser?.status === UserStatus.CUSTOMER && 
+                   !customerUser?.registrationCodeUsedAt;
 
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto' }} className="animate-fade-in">
@@ -180,8 +182,6 @@ const CaseDetailPage = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '32px', alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          
-          {/* 楽天市場 開設進捗 */}
           {activeTab === 'rakuten' && (
             <div className="animate-fade-in">
               <StatusSection title="楽天市場 開設状況" status={caseData.mallProgress.rakuten} mall="rakuten" color="#bf0000" />
@@ -191,75 +191,24 @@ const CaseDetailPage = () => {
                   <InfoRow label="申込パスワード" value={caseData.rakutenInfo?.applyPass} field="applyPass" group="rakutenInfo" />
                   <InfoRow label="R-Login ID" value={caseData.rakutenInfo?.rLoginId} field="rLoginId" group="rakutenInfo" />
                   <InfoRow label="R-Login パスワード" value={caseData.rakutenInfo?.rLoginPass} field="rLoginPass" group="rakutenInfo" />
-                  <InfoRow label="個人ID" value={caseData.rakutenInfo?.personalId} field="personalId" group="rakutenInfo" />
-                  <InfoRow label="個人パスワード" value={caseData.rakutenInfo?.personalPass} field="personalPass" group="rakutenInfo" />
-                  <InfoRow label="billpay ID" value={caseData.rakutenInfo?.billpayId} field="billpayId" group="rakutenInfo" />
-                  <InfoRow label="billpay パスワード" value={caseData.rakutenInfo?.billpayPass} field="billpayPass" group="rakutenInfo" />
                 </div>
               </Card>
             </div>
           )}
-
-          {/* Yahoo!ショッピング 開設進捗 */}
-          {activeTab === 'yahoo' && (
-            <div className="animate-fade-in">
-              <StatusSection title="Yahoo!ショッピング 開設状況" status={caseData.mallProgress.yahoo} mall="yahoo" color="#ff0033" />
-              <Card title="Yahoo!アカウント情報">
-                <div style={{ padding: '0 28px 28px' }}>
-                  <InfoRow label="ストアアカウント" value={caseData.id} />
-                  <InfoRow label="管理用メールアドレス" value={caseData.email} />
-                  <InfoRow label="連絡用電話番号" value={caseData.phone} />
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* au PAY マーケット 開設進捗 */}
-          {activeTab === 'aupay' && (
-            <div className="animate-fade-in">
-              <StatusSection title="au PAY マーケット 開設状況" status={caseData.mallProgress.aupay} mall="aupay" color="#f58220" />
-              <Card title="au PAY アカウント情報">
-                <div style={{ padding: '0 28px 28px' }}>
-                  <InfoRow label="店舗ID" value={caseData.id} />
-                  <InfoRow label="管理者ID" value={caseData.email} />
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* 顧客基本情報 */}
           {activeTab === 'customer' && (
             <div className="animate-fade-in">
               <Card title="法人/事業主情報">
                 <div style={{ padding: '0 28px 28px' }}>
-                  <InfoRow label="顧客種別" value={caseData.customerType === 'corporation' ? '法人' : '個人事業主'} field="customerType" />
                   <InfoRow label="法人名/屋号" value={caseData.companyName} field="companyName" />
-                  <InfoRow label="法人名(かな)" value={caseData.companyNameKana} field="companyNameKana" />
                   <InfoRow label="代表者氏名" value={caseData.representativeName} field="representativeName" />
-                  <InfoRow label="代表者氏名(かな)" value={caseData.representativeNameKana} field="representativeNameKana" />
-                  <InfoRow label="代表者生年月日" value={caseData.repBirthDate} field="repBirthDate" isDate />
-                  <InfoRow label="所在地郵便番号" value={caseData.zipCode} field="zipCode" />
-                  <InfoRow label="所在地住所" value={caseData.address} field="address" />
+                  <InfoRow label="メールアドレス" value={caseData.email} field="email" />
                 </div>
               </Card>
-              <div style={{marginTop: '32px'}}>
-                <Card title="担当者個人情報">
-                  <div style={{ padding: '0 28px 28px' }}>
-                    <InfoRow label="氏名(漢字)" value={caseData.repName} field="repName" />
-                    <InfoRow label="氏名(かな)" value={caseData.repNameKana} field="repNameKana" />
-                    <InfoRow label="携帯電話番号" value={caseData.phone} field="phone" />
-                    <InfoRow label="メールアドレス" value={caseData.email} field="email" />
-                  </div>
-                </Card>
-              </div>
             </div>
           )}
         </div>
 
-        {/* 右カラム：共通管理エリア */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          
-          {/* 代理店アカウント管理カード (フロー対応) */}
           <Card title="代理店アカウント管理">
             <div style={{ padding: '24px' }}>
               {isRegisteredAgency ? (
@@ -269,17 +218,29 @@ const CaseDetailPage = () => {
                   </Badge>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>ID: {caseData.id} で運用中</p>
                 </div>
-              ) : customerUser?.agencyApplicationStatus === AgencyApplicationStatus.APPROVED ? (
-                <>
+              ) : showCode ? (
+                <div style={{ textAlign: 'left' }}>
                   <Badge color="#0ea5e9" style={{ width: '100%', padding: '12px', fontSize: '0.9rem', marginBottom: '16px' }}>
                     <i className="fa-solid fa-star"></i> 昇格承認済み
                   </Badge>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginBottom: '16px', fontWeight: 700 }}>顧客へ以下のURLを共有し、パスワード設定を依頼してください。</p>
-                  <Button onClick={() => {
-                    navigator.clipboard.writeText(inviteUrl);
-                    alert('設定用URLをコピーしました。');
-                  }} style={{ width: '100%', background: 'var(--accent)' }}>設定用URLをコピー</Button>
-                </>
+                  <div style={{ background: 'var(--bg-main)', padding: '16px', borderRadius: '12px', border: '1.5px dashed var(--border)', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800, marginBottom: '8px' }}>顧客へ共有する情報:</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>顧客ID:</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--primary)' }}>{caseData.id}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>登録コード:</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--accent)' }}>{customerUser?.registrationCode}</span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-main)', marginBottom: '16px', fontWeight: 600, lineHeight: 1.5 }}>
+                    顧客へ「顧客ID」と「登録コード」を伝え、ログイン画面のリンクからパスワード設定を依頼してください。
+                  </p>
+                  <Button onClick={handleReissueCode} variant="ghost" style={{ width: '100%', border: '1px solid var(--border)', fontSize: '0.8rem' }}>
+                    登録コードを再発行する
+                  </Button>
+                </div>
               ) : customerUser?.agencyApplicationStatus === AgencyApplicationStatus.PENDING ? (
                 <div style={{ textAlign: 'center' }}>
                   <Badge color="#f59e0b" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>
@@ -301,26 +262,11 @@ const CaseDetailPage = () => {
           {isAdmin && (
             <Card title="収益サマリー (管理者)" style={{ border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.02)' }}>
               <div style={{ padding: '24px' }}>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)' }}>案件合計額 (税込)</label>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>¥{caseData.baseAmount.toLocaleString()}</div>
-                </div>
                 <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>代理店報酬</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)' }}>¥{agencyAmount.toLocaleString()}</div>
               </div>
             </Card>
           )}
-
-          <Card title="ToDo 進捗">
-            <div style={{ padding: '20px' }}>
-              {caseData.tasks.length > 0 ? caseData.tasks.map(task => (
-                <div key={task.id} onClick={() => handleTaskToggle(task.id, task.status)} style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: 'var(--bg-main)', borderRadius: '14px', marginBottom: '8px', cursor: 'pointer', border: '1px solid var(--border)' }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>{task.title}</div>
-                  <Badge color="#4f46e5" style={{ fontSize: '0.65rem' }}>{task.status}</Badge>
-                </div>
-              )) : <div style={{textAlign:'center', color:'var(--text-sub)', fontSize:'0.8rem'}}>タスクなし</div>}
-            </div>
-          </Card>
         </div>
       </div>
     </div>
