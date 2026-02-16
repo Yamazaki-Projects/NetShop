@@ -65,7 +65,6 @@ const CaseListPage = () => {
     });
 
     return result.sort((a, b) => {
-      // Fix TS18048: Ensure values are never undefined during comparison
       let aVal: string | number = '';
       let bVal: string | number = '';
 
@@ -76,7 +75,6 @@ const CaseListPage = () => {
         aVal = a.customerName || '';
         bVal = b.customerName || '';
       } else {
-        // Fallback for other keys if needed
         const rawA = a[sortConfig.key as keyof Case];
         const rawB = b[sortConfig.key as keyof Case];
         aVal = (rawA !== null && rawA !== undefined) ? String(rawA) : '';
@@ -101,11 +99,9 @@ const CaseListPage = () => {
 
   const renderStatusBadge = (email: string) => {
     const u = allUsers.find(x => x.email === email);
-    if (!u) return <Badge color="#64748b">顧客</Badge>;
-    if (u.status === UserStatus.AGENCY) return <Badge color="#1e293b">代理店</Badge>;
-    if (u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
-    if (u.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">申請中</Badge>;
-    return <Badge color="#64748b">顧客</Badge>;
+    if (!u) return <Badge color="#94a3b8">未登録</Badge>;
+    if (u.status === UserStatus.AGENCY) return <Badge color="#10b981">代理店</Badge>;
+    return <Badge color="#0ea5e9">未登録</Badge>;
   };
 
   return (
@@ -113,7 +109,7 @@ const CaseListPage = () => {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
         <div>
           <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>顧客管理</h1>
-          <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>直紹介およびチームの顧客進捗を管理します。</p>
+          <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>全ての案件は作成と同時に代理店アカウントが発行されます。</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>+ 新規顧客登録</Button>
       </header>
@@ -131,7 +127,6 @@ const CaseListPage = () => {
         {loading ? (
           <div style={{ padding: '64px', textAlign: 'center', color: 'var(--text-sub)' }}>
             <i className="fa-solid fa-spinner fa-spin fa-2x"></i>
-            <p style={{ marginTop: '16px', fontWeight: 700 }}>読み込み中...</p>
           </div>
         ) : filteredCases.length === 0 ? (
           <div style={{ padding: '64px', textAlign: 'center', color: 'var(--text-sub)' }}>

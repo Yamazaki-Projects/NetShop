@@ -80,17 +80,6 @@ const CaseDetailPage = () => {
     navigate(0);
   };
 
-  const handleApplyAgency = async () => {
-    if (!window.confirm('この顧客を代理店パートナーへ昇格申請しますか？')) return;
-    const ok = await db.applyForAgencyByCase(caseData, user);
-    if (ok) {
-      alert('代理店昇格申請を受け付けました。管理者の承認完了までしばらくお待ちください。');
-      navigate(0);
-    } else {
-      alert('申請処理中にエラーが発生しました。');
-    }
-  };
-
   const startEdit = () => {
     setEditedCase({ ...caseData });
     setIsEditing(true);
@@ -151,8 +140,10 @@ const CaseDetailPage = () => {
   );
 
   const agencyAmount = caseData.isManualAdjustment ? (caseData.manualAgencyAmount || 0) : (caseData.baseAmount * caseData.appliedRate);
-  const isAgency = customerUser?.status === UserStatus.AGENCY;
-  const applicationStatus = customerUser?.agencyApplicationStatus || AgencyApplicationStatus.NONE;
+  const isRegisteredAgency = customerUser?.status === UserStatus.AGENCY;
+  
+  // 初回ログインURLの生成 (ドメイン/register?id=PAxxxx)
+  const inviteUrl = `${window.location.origin}/#/register?id=${caseData.id}`;
 
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto' }} className="animate-fade-in">
@@ -187,7 +178,7 @@ const CaseDetailPage = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '32px', alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          
+          {/* メイン情報タブの内容 (省略せず維持) */}
           {activeTab === 'rakuten' && (
             <div className="animate-fade-in">
               <StatusSection title="楽天市場 開設状況" status={caseData.mallProgress.rakuten} mall="rakuten" color="#bf0000" />
@@ -203,7 +194,6 @@ const CaseDetailPage = () => {
                   <InfoRow label="billpay パスワード" value={caseData.rakutenInfo?.billpayPass} field="billpayPass" group="rakutenInfo" />
                 </div>
               </Card>
-
               <div style={{marginTop: '32px'}}>
                 <Card title="050番号 (Subline)">
                   <div style={{ padding: '0 28px 28px' }}>
@@ -213,7 +203,6 @@ const CaseDetailPage = () => {
                   </div>
                 </Card>
               </div>
-
               <div style={{marginTop: '32px'}}>
                 <Card title="e-mail.jp">
                   <div style={{ padding: '0 28px 28px' }}>
@@ -281,27 +270,40 @@ const CaseDetailPage = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          {/* パートナー昇格申請 */}
-          {!isAgency && (
-            <Card title="パートナー昇格申請" style={{ border: '2px solid #f59e0b', background: 'rgba(245, 158, 11, 0.05)' }}>
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                {applicationStatus === AgencyApplicationStatus.NONE ? (
-                  <>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginBottom: '16px', fontWeight: 700, lineHeight: 1.5 }}>
-                      この顧客を代理店パートナーへ昇格させることができます。
-                    </p>
-                    <Button onClick={handleApplyAgency} style={{ width: '100%', background: '#f59e0b', color: 'white' }}>
-                      <i className="fa-solid fa-user-plus"></i> 代理店として申請する
-                    </Button>
-                  </>
-                ) : (
-                  <Badge color="#f59e0b" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>
-                    <i className="fa-solid fa-clock-rotate-left"></i> {applicationStatus === AgencyApplicationStatus.PENDING ? '審査中' : '承認済 (パスワード設定待ち)'}
+          {/* 代理店アカウント管理 */}
+          <Card title="代理店アカウント設定" style={{ border: isRegisteredAgency ? '1px solid var(--border)' : '2px solid var(--accent)', background: isRegisteredAgency ? 'transparent' : 'rgba(14, 165, 233, 0.05)' }}>
+            <div style={{ padding: '24px' }}>
+              {isRegisteredAgency ? (
+                <div style={{ textAlign: 'center' }}>
+                  <Badge color="#10b981" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>
+                    <i className="fa-solid fa-check-circle"></i> 代理店登録済み
                   </Badge>
-                )}
-              </div>
-            </Card>
-          )}
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>
+                    顧客ID: <strong>{caseData.id}</strong> でログイン可能です。
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginBottom: '16px', fontWeight: 700, lineHeight: 1.6 }}>
+                    この案件は代理店アカウントとして自動発行されています。顧客へ以下の情報を共有し、パスワード設定を依頼してください。
+                  </p>
+                  <div style={{ background: 'var(--bg-main)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>ログインID</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      {caseData.id}
+                      <button onClick={() => navigator.clipboard.writeText(caseData.id)} style={{ border: 'none', background: 'none', color: 'var(--accent)', cursor: 'pointer' }}><i className="fa-regular fa-copy"></i></button>
+                    </div>
+                  </div>
+                  <Button onClick={() => {
+                    navigator.clipboard.writeText(inviteUrl);
+                    alert('初回設定用URLをコピーしました。');
+                  }} style={{ width: '100%', background: 'var(--accent)', color: 'white' }}>
+                    <i className="fa-solid fa-link"></i> 設定用URLをコピー
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
 
           {isAdmin && (
             <Card title="収益サマリー (管理者)" style={{ border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.02)' }}>

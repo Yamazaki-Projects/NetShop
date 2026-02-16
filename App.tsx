@@ -11,7 +11,6 @@ import LoginPage from './pages_spa/LoginPage';
 import TierTreePage from './pages_spa/TierTreePage';
 import RegistrationPage from './pages_spa/RegistrationPage';
 import AgencyListPage from './pages_spa/AgencyListPage';
-import AgencyApprovalPage from './pages_spa/AgencyApprovalPage';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -133,7 +132,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           {user.role === UserRole.ADMIN && (
             <>
               <div style={{ margin: '32px 20px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Administrator</div>
-              <SidebarLink to="/approvals" icon="fa-user-check" label="代理店承認" active={location.pathname === '/approvals'} />
               <SidebarLink to="/agencies" icon="fa-building-columns" label="代理店一覧" active={location.pathname === '/agencies'} />
             </>
           )}
@@ -290,7 +288,6 @@ export default function App() {
           <Route path="/cases/:id" element={user ? <Layout><CaseDetailPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/tree" element={user ? <Layout><TierTreePage /></Layout> : <Navigate to="/login" />} />
           <Route path="/agencies" element={user ? <Layout><AgencyListPage /></Layout> : <Navigate to="/login" />} />
-          <Route path="/approvals" element={user ? <Layout><AgencyApprovalPage /></Layout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

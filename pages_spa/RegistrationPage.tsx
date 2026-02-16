@@ -1,17 +1,27 @@
 
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { Card, Button, Input, Badge } from '../components/UI';
 
 const RegistrationPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<1 | 2>(1);
   const [customerId, setCustomerId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // URLパラメータからIDを取得 (?id=PA0001)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const idParam = params.get('id');
+    if (idParam) {
+      setCustomerId(idParam.toUpperCase());
+    }
+  }, [location]);
 
   // ステップ1: IDチェック
   const handleCheckId = async (e: React.FormEvent) => {
@@ -22,8 +32,8 @@ const RegistrationPage = () => {
     if (result.ok) {
       setStep(2);
     } else {
-      if (result.reason === 'not_approved') {
-        setError('この顧客IDはまだ管理者によって承認されていないか、存在しません。');
+      if (result.reason === 'not_found') {
+        setError('この顧客IDは見つかりませんでした。正しいIDを入力してください。');
       } else if (result.reason === 'already_registered') {
         setError('この顧客IDはすでに登録済みです。ログイン画面からログインしてください。');
       } else {
@@ -47,22 +57,31 @@ const RegistrationPage = () => {
 
     setLoading(true);
     setError('');
-    const result = await db.completeRegistration(customerId, password);
-    if (result.ok) {
-      alert('代理店登録が完了しました。設定したパスワードでログインしてください。');
-      navigate('/login');
-    } else {
-      setError('登録処理に失敗しました。');
+    try {
+      const result = await db.completeRegistration(customerId, password);
+      if (result.ok) {
+        alert('アカウントの有効化が完了しました。設定したパスワードでログインしてください。');
+        navigate('/login');
+      } else {
+        setError('登録処理に失敗しました。');
+      }
+    } catch (err: any) {
+      setError('登録中にエラーが発生しました。' + (err.message || ''));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)' }}>
       <div style={{ width: '100%', maxWidth: '460px', padding: '24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)' }}>代理店本登録</h1>
-          <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>管理者承認済みのIDで登録を開始します</p>
+          <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.03em' }}>
+            Account <span style={{ color: 'var(--primary)' }}>Setup</span>
+          </h1>
+          <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>
+            代理店アカウントの初期設定を行います
+          </p>
         </div>
 
         <Card style={{ padding: '40px' }}>
@@ -71,26 +90,32 @@ const RegistrationPage = () => {
               <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(79, 70, 229, 0.05)', borderRadius: '12px', border: '1px solid rgba(79, 70, 229, 0.1)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 700, lineHeight: 1.5 }}>
                   <i className="fa-solid fa-circle-info" style={{ marginRight: '6px' }}></i>
-                  案件画面から申請し、管理者から承認された「顧客ID」を入力してください。
+                  案件登録時に発行された「顧客ID（PAから始まる番号）」を入力してください。
                 </p>
               </div>
               <Input 
-                label="顧客ID" 
+                label="顧客ID (Login ID)" 
                 placeholder="例: PA0001" 
                 value={customerId} 
                 onChange={e => setCustomerId(e.target.value.toUpperCase())}
                 required
               />
-              {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 700, marginBottom: '20px' }}>{error}</p>}
-              <Button type="submit" disabled={loading} style={{ width: '100%' }}>
-                {loading ? '確認中...' : '次へ進む'}
+              {error && (
+                <div style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 700, marginBottom: '20px', padding: '12px', background: '#fef2f2', borderRadius: '10px' }}>
+                  {error}
+                </div>
+              )}
+              <Button type="submit" disabled={loading} style={{ width: '100%', height: '50px' }}>
+                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : '設定を開始する'}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="animate-fade-in">
               <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-                <Badge color="var(--primary)" style={{ fontSize: '0.9rem', padding: '8px 16px' }}>ID: {customerId}</Badge>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>ログインに使用するパスワードを設定してください</p>
+                <Badge color="var(--primary)" style={{ fontSize: '1rem', padding: '10px 20px' }}>ID: {customerId}</Badge>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', marginTop: '16px', fontWeight: 600 }}>
+                  ログインに使用するパスワードを設定してください
+                </p>
               </div>
               <Input 
                 label="パスワード (8文字以上)" 
@@ -98,6 +123,7 @@ const RegistrationPage = () => {
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
                 required 
+                autoComplete="new-password"
               />
               <Input 
                 label="パスワード確認" 
@@ -105,20 +131,25 @@ const RegistrationPage = () => {
                 value={confirmPassword} 
                 onChange={e => setConfirmPassword(e.target.value)} 
                 required 
+                autoComplete="new-password"
               />
-              {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 700, marginBottom: '20px' }}>{error}</p>}
+              {error && (
+                <div style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 700, marginBottom: '20px', padding: '12px', background: '#fef2f2', borderRadius: '10px' }}>
+                  {error}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '12px' }}>
                 <Button variant="ghost" onClick={() => setStep(1)} disabled={loading} style={{ flex: 1 }}>戻る</Button>
-                <Button type="submit" disabled={loading} style={{ flex: 2 }}>
-                  {loading ? '登録中...' : '登録を完了する'}
+                <Button type="submit" disabled={loading} style={{ flex: 2, height: '50px' }}>
+                  {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'パスワードを確定'}
                 </Button>
               </div>
             </form>
           )}
 
-          <div style={{ marginTop: '32px', textAlign: 'center' }}>
-            <Link to="/login" style={{ fontSize: '0.85rem', color: 'var(--text-sub)', textDecoration: 'none', fontWeight: 700 }}>
-              ログイン画面に戻る
+          <div style={{ marginTop: '32px', textAlign: 'center', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+            <Link to="/login" style={{ fontSize: '0.9rem', color: 'var(--text-sub)', textDecoration: 'none', fontWeight: 800 }}>
+              <i className="fa-solid fa-arrow-left" style={{ marginRight: '8px' }}></i> ログイン画面へ戻る
             </Link>
           </div>
         </Card>

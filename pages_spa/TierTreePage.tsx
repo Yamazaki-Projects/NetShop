@@ -11,6 +11,7 @@ type TreeElement =
   | { type: 'user'; data: User }
   | { type: 'case'; data: Case };
 
+// Added key?: React.Key to props to fix TS error in recursive calls and parent usage
 const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: { 
   element: TreeElement; 
   level: number; 
@@ -18,6 +19,7 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
   currentUser: User; 
   allUsers: User[]; 
   allCases: Case[];
+  key?: React.Key;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const navigate = useNavigate();
