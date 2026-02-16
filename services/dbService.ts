@@ -33,30 +33,65 @@ class DBService {
   }
 
   async getCurrentUser(): Promise<User | null> {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session || !session.user) return null;
-    
-    const { data: profile } = await supabase.from('users')
-      .select('*')
-      .eq('auth_uid', session.user.id)
-      .maybeSingle();
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session || !session.user) return null;
       
-    return profile ? this.mapUser(profile) : null;
+      const { data: profile } = await supabase.from('users')
+        .select('*')
+        .eq('auth_uid', session.user.id)
+        .maybeSingle();
+        
+      return profile ? this.mapUser(profile) : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   async login(loginId: string, pass: string): Promise<User | null> {
     const email = this.toInternalEmail(loginId);
     try {
+      // 1. Supabase Auth で認証
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (authError || !authData.user) return null;
+      if (authError || !authData.user) {
+        console.error("Auth error:", authError);
+        return null;
+      }
       
-      const { data: profile } = await supabase.from('users')
+      const authUid = authData.user.id;
+
+      // 2. auth_uid でプロフィールを検索
+      let { data: profile } = await supabase.from('users')
         .select('*')
-        .eq('auth_uid', authData.user.id)
+        .eq('auth_uid', authUid)
         .maybeSingle();
+
+      // 3. auth_uid で見つからない場合（初回ログイン時など）、login_id で検索して紐付け
+      if (!profile) {
+        const { data: legacyProfile } = await supabase.from('users')
+          .select('*')
+          .eq('login_id', loginId)
+          .maybeSingle();
+
+        if (legacyProfile) {
+          // auth_uid を更新して紐付け
+          const { data: updatedProfile, error: updateError } = await supabase.from('users')
+            .update({ auth_uid: authUid })
+            .eq('id', legacyProfile.id)
+            .select()
+            .single();
+          
+          if (!updateError) {
+            profile = updatedProfile;
+          }
+        }
+      }
         
       return profile ? this.mapUser(profile) : null;
-    } catch (e) { return null; }
+    } catch (e) {
+      console.error("Login exception:", e);
+      return null;
+    }
   }
 
   async getUsers(): Promise<User[]> {
@@ -160,14 +195,12 @@ class DBService {
   }
 
   async applyForAgency(loginId: string): Promise<{ ok: boolean, error?: any }> {
-    // .select() を追加して、実際に更新された行があるか確認可能にします
     const { data, error } = await supabase
       .from('users')
       .update({ agency_application_status: AgencyApplicationStatus.PENDING })
       .eq('login_id', loginId)
       .select();
       
-    // エラーがなく、かつ1行以上更新されていれば成功
     return { ok: !error && data && data.length > 0, error };
   }
 
