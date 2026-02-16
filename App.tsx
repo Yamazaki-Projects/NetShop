@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
+// Migrated to react-router-dom v6 (Routes instead of Switch, Navigate instead of Redirect, useNavigate instead of useHistory)
 import { HashRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { db } from './services/dbService';
@@ -50,6 +51,7 @@ const SidebarLink = ({ to, icon, label, active }: { to: string; icon: string; la
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
   const { user, setUser } = useAppContext();
+  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -116,16 +118,17 @@ export default function App() {
   return (
     <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>
       <HashRouter>
+        {/* Migrated Routes/Route for v6 compatibility */}
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegistrationPage />} />
-          <Route path="/" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />} />
-          <Route path="/cases" element={user ? <Layout><CaseListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/cases/:id" element={user ? <Layout><CaseDetailPage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/cases" element={user ? <Layout><CaseListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/approvals" element={user ? <Layout><AgencyApprovalPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/tree" element={user ? <Layout><TierTreePage /></Layout> : <Navigate to="/login" />} />
           <Route path="/agencies" element={user ? <Layout><AgencyListPage /></Layout> : <Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </HashRouter>
     </AppContext.Provider>

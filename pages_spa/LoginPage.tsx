@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+// Migrated to useNavigate for v6 compatibility
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
@@ -7,6 +8,7 @@ import { Card, Button, Input } from '../components/UI';
 
 const LoginPage = () => {
   const { setUser } = useAppContext();
+  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');

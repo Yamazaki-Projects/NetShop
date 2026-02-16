@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
+// Migrated to useNavigate for v6 compatibility
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { Card, Button, Input, Badge } from '../components/UI';
 
 const RegistrationPage = () => {
+  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const location = useLocation();
   const [step, setStep] = useState<1 | 2>(1);

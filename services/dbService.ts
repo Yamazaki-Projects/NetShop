@@ -12,7 +12,7 @@ class DBService {
   }
 
   private generateRandomCode(length: number = 8): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 読み間違えやすい I, O, 0, 1 を除外
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
     let result = '';
     for (let i = 0; i < length; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -35,7 +35,12 @@ class DBService {
   async getCurrentUser(): Promise<User | null> {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session || !session.user) return null;
-    const { data: profile } = await supabase.from('users').select('*').eq('id', session.user.id).maybeSingle();
+    
+    const { data: profile } = await supabase.from('users')
+      .select('*')
+      .eq('auth_uid', session.user.id)
+      .maybeSingle();
+      
     return profile ? this.mapUser(profile) : null;
   }
 
@@ -44,7 +49,12 @@ class DBService {
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: pass });
       if (authError || !authData.user) return null;
-      let { data: profile } = await supabase.from('users').select('*').eq('id', authData.user.id).maybeSingle();
+      
+      const { data: profile } = await supabase.from('users')
+        .select('*')
+        .eq('auth_uid', authData.user.id)
+        .maybeSingle();
+        
       return profile ? this.mapUser(profile) : null;
     } catch (e) { return null; }
   }
@@ -118,7 +128,7 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      id: crypto.randomUUID(),
+      id: nextId, 
       login_id: nextId,
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
@@ -149,22 +159,16 @@ class DBService {
     return data ? this.mapCase(data) : null;
   }
 
-  async applyForAgency(loginId: string): Promise<{ ok: boolean }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.PENDING })
-      .eq('login_id', loginId);
-    return { ok: !error };
-  }
-
-  async getPendingApplications(): Promise<User[]> {
+  async applyForAgency(loginId: string): Promise<{ ok: boolean, error?: any }> {
+    // .select() を追加して、実際に更新された行があるか確認可能にします
     const { data, error } = await supabase
       .from('users')
-      .select('*')
-      .eq('agency_application_status', AgencyApplicationStatus.PENDING)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(u => this.mapUser(u));
+      .update({ agency_application_status: AgencyApplicationStatus.PENDING })
+      .eq('login_id', loginId)
+      .select();
+      
+    // エラーがなく、かつ1行以上更新されていれば成功
+    return { ok: !error && data && data.length > 0, error };
   }
 
   async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
@@ -180,14 +184,6 @@ class DBService {
     return { ok: !error, message: error?.message };
   }
 
-  async rejectApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.NONE })
-      .eq('login_id', loginId);
-    return { ok: !error, message: error?.message };
-  }
-
   async reissueRegistrationCode(loginId: string): Promise<{ ok: boolean, code?: string }> {
     const newCode = this.generateRandomCode();
     const { error } = await supabase
@@ -197,18 +193,19 @@ class DBService {
         registration_code_used_at: null 
       })
       .eq('login_id', loginId)
-      .is('registration_code_used_at', null); // 使用済みの場合は再発行不可
+      .is('registration_code_used_at', null); 
     return { ok: !error, code: newCode };
+  }
+
+  async calculateRate(userId: string): Promise<number> {
+    const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
+    const approvedCount = count || 0;
+    return approvedCount >= 11 ? 0.5 : (approvedCount >= 2 ? 0.4 : 0.3);
   }
 
   async getApprovedCount(userId: string): Promise<number> {
     const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
     return count || 0;
-  }
-
-  async calculateRate(userId: string): Promise<number> {
-    const count = await this.getApprovedCount(userId);
-    return count >= 11 ? 0.5 : (count >= 2 ? 0.4 : 0.3);
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
@@ -221,7 +218,12 @@ class DBService {
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const { data } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+    if (!email) return null;
+    const { data, error } = await supabase.from('users').select('*').eq('email', email.trim()).maybeSingle();
+    if (error) {
+      console.error("DB Error fetching user by email:", error);
+      return null;
+    }
     return data ? this.mapUser(data) : null;
   }
 
@@ -237,19 +239,16 @@ class DBService {
   }
 
   async completeRegistration(loginId: string, registrationCode: string, password: string): Promise<{ ok: boolean }> {
-    // 1. 再度バリデーション
     const check = await this.checkRegistrationEligibility(loginId, registrationCode);
     if (!check.ok) throw new Error(check.reason);
 
     const email = this.toInternalEmail(loginId);
     
-    // 2. Supabase Auth への登録
     const { data: authUser, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) throw signUpError;
 
-    // 3. users テーブルの更新
     const { error } = await supabase.from('users').update({ 
-      id: authUser.user?.id, 
+      auth_uid: authUser.user?.id, 
       status: UserStatus.AGENCY, 
       role: UserRole.AGENCY,
       registration_code_used_at: new Date().toISOString()
@@ -265,7 +264,7 @@ class DBService {
 
   private mapUser(u: any): User {
     return {
-      id: u.id, loginId: u.login_id, email: u.email, name: u.name, role: u.role as UserRole,
+      id: u.id, auth_uid: u.auth_uid, loginId: u.login_id, email: u.email, name: u.name, role: u.role as UserRole,
       status: u.status as UserStatus, referrerId: u.referrer_id,
       agencyApplicationStatus: u.agency_application_status as AgencyApplicationStatus,
       manualRateOverride: u.manual_rate_override, manualBaseAmountOverride: u.manual_base_amount_override,

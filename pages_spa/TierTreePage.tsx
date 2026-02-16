@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+// Migrated to useNavigate for v6 compatibility
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
@@ -22,6 +23,7 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
   key?: React.Key;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
 
   // 子要素（紹介したユーザー + 紹介した案件）を計算

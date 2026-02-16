@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+// Migrated to useNavigate for v6 compatibility
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
@@ -8,6 +9,7 @@ import { Card, Input, Button, Badge } from '../components/UI';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
+  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'mine' | 'team'>('mine');
   const [search, setSearch] = useState('');

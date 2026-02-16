@@ -49,7 +49,8 @@ export enum MallOpeningStatus {
 }
 
 export interface User {
-  id: string;
+  id: string; // 固定のPA番号 (Primary Key)
+  auth_uid?: string; // Supabase Auth の UID
   loginId: string;
   email: string;
   role: UserRole;
@@ -62,8 +63,8 @@ export interface User {
   isDeletionPending?: boolean;
   manualRateOverride?: number; 
   manualBaseAmountOverride?: number;
-  registrationCode?: string; // 追加: 登録コード
-  registrationCodeUsedAt?: string | null; // 追加: コード使用日時
+  registrationCode?: string;
+  registrationCodeUsedAt?: string | null;
   createdAt: string;
 }
 
@@ -75,35 +76,27 @@ export interface Case {
   status: CaseStatus;
   platform: PlatformType;
   customerType: 'corporation' | 'sole_proprietor';
-  
-  // 法人情報
-  companyName: string; // 法人名/屋号
-  companyNameKana: string; // 法人名/屋号ふりがな
-  representativeName: string; // 代表者名
-  representativeNameKana: string; // 代表者名ふりがな
-  corporateNumber?: string; // 法人番号
-  establishedDate?: string; // 設立年月日 (YYYY-MM-DD)
-  zipCode?: string; // 法人郵便番号
-  address?: string; // 法人住所
-  
-  // 代表者情報 (個人)
-  repName: string; // 名前
-  repNameKana: string; // 名前ふりがな
-  repBirthDate?: string; // 生年月日 (YYYY-MM-DD)
-  repZipCode?: string; // 代表者郵便番号
-  repAddress?: string; // 代表者住所
-  phone: string; // 携帯電話番号 (ハイフンなし)
-  
-  // レガシー互換・表示用
-  customerName: string; // 一覧表示用の名称 (基本的には repName)
+  companyName: string;
+  companyNameKana: string;
+  representativeName: string;
+  representativeNameKana: string;
+  corporateNumber?: string;
+  establishedDate?: string;
+  zipCode?: string;
+  address?: string;
+  repName: string;
+  repNameKana: string;
+  repBirthDate?: string;
+  repZipCode?: string;
+  repAddress?: string;
+  phone: string;
+  customerName: string;
   email: string;
   notes?: string;
-  
   baseAmount: number;
   appliedRate: number; 
   isManualAdjustment: boolean;
-  manualAgencyAmount?: number; // マニュアル調整時の代理店報酬額
-  
+  manualAgencyAmount?: number;
   createdAt: string;
   updatedAt: string;
   tasks: CaseTask[];

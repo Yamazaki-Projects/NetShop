@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
@@ -28,25 +28,27 @@ const CaseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [applicationLoading, setApplicationLoading] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-        const c = await db.getCaseById(id);
-        if (c) {
-          setCaseData(c);
-          const u = await db.getUserByEmail(c.email);
-          setCustomerUser(u);
-        }
-      } catch (err) {
-        console.error("Failed to load details", err);
-      } finally {
-        setLoading(false);
+  // データ再取得用
+  const loadData = useCallback(async () => {
+    if (!id) return;
+    try {
+      const c = await db.getCaseById(id);
+      if (c) {
+        setCaseData(c);
+        const u = await db.getUserByEmail(c.email);
+        setCustomerUser(u);
       }
-    };
-    loadData();
+    } catch (err) {
+      console.error("Failed to load details", err);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -61,14 +63,29 @@ const CaseDetailPage = () => {
   const isAdmin = user.role === UserRole.ADMIN;
 
   const handleApplyForAgency = async () => {
-    if (!customerUser) return;
-    setApplicationLoading(true);
-    const res = await db.applyForAgency(customerUser.loginId);
-    if (res.ok) {
-      alert('代理店昇格申請を送信しました。管理者の承認をお待ちください。');
-      navigate(0);
+    console.log("handleApplyForAgency triggered", { customerUser, caseData });
+    
+    if (!customerUser) {
+      alert(`診断エラー:\nこの案件のメールアドレス「${caseData.email}」に一致するユーザーレコードがusersテーブルに見つかりません。\n\n確認事項:\n1. usersテーブルに「email: ${caseData.email}」の行が存在するか\n2. 前後に不要なスペースが含まれていないか\n3. RLS設定によりアクセスが拒否されていないか`);
+      return;
     }
-    setApplicationLoading(false);
+    
+    setApplicationLoading(true);
+    try {
+      const res = await db.applyForAgency(customerUser.loginId);
+      if (res.ok) {
+        alert('代理店昇格申請を送信しました。管理者の承認をお待ちください。');
+        await loadData(); // ページリロードせずデータを再取得
+      } else {
+        const errorMsg = res.error?.message || "更新された行がありません。";
+        alert(`申請に失敗しました。\n理由: ${errorMsg}\n\nヒント: RLS(行セキュリティ)で、代理店によるusersテーブルの更新が許可されているか確認してください。`);
+      }
+    } catch (e: any) {
+      console.error("Application error:", e);
+      alert('システムエラーが発生しました: ' + e.message);
+    } finally {
+      setApplicationLoading(false);
+    }
   };
 
   const handleReissueCode = async () => {
@@ -76,14 +93,14 @@ const CaseDetailPage = () => {
     const res = await db.reissueRegistrationCode(customerUser.loginId);
     if (res.ok) {
       alert('登録コードを再発行しました。');
-      navigate(0);
+      await loadData();
     }
   };
 
   const handleMallStatusChange = async (mall: 'rakuten' | 'yahoo' | 'aupay', status: MallOpeningStatus) => {
     const updatedMallProgress = { ...caseData.mallProgress, [mall]: status };
     await db.updateCase(caseData.id, { mallProgress: updatedMallProgress }, user);
-    navigate(0);
+    await loadData();
   };
 
   const startEdit = () => {
@@ -96,7 +113,7 @@ const CaseDetailPage = () => {
       const result = await db.updateCase(caseData.id, editedCase, user);
       if (result) {
         setIsEditing(false);
-        navigate(0);
+        await loadData();
       }
     }
   };
@@ -144,10 +161,11 @@ const CaseDetailPage = () => {
   );
 
   const agencyAmount = caseData.isManualAdjustment ? (caseData.manualAgencyAmount || 0) : (caseData.baseAmount * caseData.appliedRate);
+  
   const isRegisteredAgency = customerUser?.status === UserStatus.AGENCY;
-  const showCode = customerUser?.agencyApplicationStatus === AgencyApplicationStatus.APPROVED && 
-                   customerUser?.status === UserStatus.CUSTOMER && 
-                   !customerUser?.registrationCodeUsedAt;
+  const isApproved = customerUser?.agencyApplicationStatus === AgencyApplicationStatus.APPROVED;
+  const isUsed = !!customerUser?.registrationCodeUsedAt;
+  const showCodeArea = isApproved && !isRegisteredAgency && !isUsed;
 
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto' }} className="animate-fade-in">
@@ -189,8 +207,6 @@ const CaseDetailPage = () => {
                 <div style={{ padding: '0 28px 28px' }}>
                   <InfoRow label="申込ID" value={caseData.rakutenInfo?.applyId} field="applyId" group="rakutenInfo" />
                   <InfoRow label="申込パスワード" value={caseData.rakutenInfo?.applyPass} field="applyPass" group="rakutenInfo" />
-                  <InfoRow label="R-Login ID" value={caseData.rakutenInfo?.rLoginId} field="rLoginId" group="rakutenInfo" />
-                  <InfoRow label="R-Login パスワード" value={caseData.rakutenInfo?.rLoginPass} field="rLoginPass" group="rakutenInfo" />
                 </div>
               </Card>
             </div>
@@ -218,7 +234,7 @@ const CaseDetailPage = () => {
                   </Badge>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>ID: {caseData.id} で運用中</p>
                 </div>
-              ) : showCode ? (
+              ) : showCodeArea ? (
                 <div style={{ textAlign: 'left' }}>
                   <Badge color="#0ea5e9" style={{ width: '100%', padding: '12px', fontSize: '0.9rem', marginBottom: '16px' }}>
                     <i className="fa-solid fa-star"></i> 昇格承認済み
@@ -248,10 +264,19 @@ const CaseDetailPage = () => {
                   </Badge>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>管理者の承認をお待ちください。</p>
                 </div>
+              ) : isUsed ? (
+                <div style={{ textAlign: 'center' }}>
+                  <Badge color="#94a3b8" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>登録コード使用済み</Badge>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>登録処理が完了しました。</p>
+                </div>
               ) : (
                 <>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginBottom: '16px', fontWeight: 600 }}>この顧客を代理店へ昇格させることができます。</p>
-                  <Button onClick={handleApplyForAgency} disabled={applicationLoading} style={{ width: '100%' }}>
+                  <Button 
+                    onClick={handleApplyForAgency} 
+                    disabled={applicationLoading} 
+                    style={{ width: '100%', height: '50px' }}
+                  >
                     {applicationLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '代理店昇格を申請する'}
                   </Button>
                 </>
