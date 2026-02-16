@@ -67,7 +67,6 @@ class DBService {
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
     const rate = await this.calculateRate(actor.id);
     
-    // 顧客IDの連番生成ロジック (PA0001〜)
     const { data: lastCases, error: fetchError } = await supabase
       .from('cases')
       .select('id')
@@ -106,20 +105,19 @@ class DBService {
       updated_at: new Date().toISOString()
     };
     
-    // 案件作成
     const { data: caseResult, error: caseError } = await supabase.from('cases').insert([this.normalizePayload(dbPayload)]).select().single();
     if (caseError) throw caseError;
 
-    // 案件作成と同時に「パスワード設定待ち」のユーザーを作成（昇格申請を不要にする）
+    // 案件作成時は「未申請」の顧客としてユーザーを作成
     const newUser = {
       id: crypto.randomUUID(),
       login_id: nextId,
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
-      status: UserStatus.CUSTOMER, // 最初はパスワード未設定なのでCUSTOMER
+      status: UserStatus.CUSTOMER,
       referrer_id: actor.id,
-      agency_application_status: AgencyApplicationStatus.APPROVED, // 自動承認
+      agency_application_status: AgencyApplicationStatus.NONE, // 最初は未申請
       created_at: new Date().toISOString()
     };
     await supabase.from('users').insert([newUser]);
@@ -141,6 +139,40 @@ class DBService {
     const { data, error } = await supabase.from('cases').update(this.normalizePayload(dbUpdates)).eq('id', id).select().single();
     if (error) throw error;
     return data ? this.mapCase(data) : null;
+  }
+
+  async applyForAgency(loginId: string): Promise<{ ok: boolean }> {
+    const { error } = await supabase
+      .from('users')
+      .update({ agency_application_status: AgencyApplicationStatus.PENDING })
+      .eq('login_id', loginId);
+    return { ok: !error };
+  }
+
+  async getPendingApplications(): Promise<User[]> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('agency_application_status', AgencyApplicationStatus.PENDING)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(u => this.mapUser(u));
+  }
+
+  async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
+    const { error } = await supabase
+      .from('users')
+      .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
+      .eq('login_id', loginId);
+    return { ok: !error, message: error?.message };
+  }
+
+  async rejectApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
+    const { error } = await supabase
+      .from('users')
+      .update({ agency_application_status: AgencyApplicationStatus.NONE })
+      .eq('login_id', loginId);
+    return { ok: !error, message: error?.message };
   }
 
   async getApprovedCount(userId: string): Promise<number> {
@@ -171,17 +203,15 @@ class DBService {
     const { data: user } = await supabase.from('users').select('*').eq('login_id', loginId).maybeSingle();
     if (!user) return { ok: false, reason: 'not_found' };
     if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
-    // 全ての案件作成時にAPPROVEDになっているため、ここのチェックは通る
+    if (user.agency_application_status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
     return { ok: true };
   }
 
   async completeRegistration(loginId: string, password: string): Promise<{ ok: boolean }> {
     const email = this.toInternalEmail(loginId);
-    // Supabase Authへの登録
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) throw signUpError;
 
-    // usersテーブルの更新
     const { error } = await supabase.from('users').update({ 
       id: data.user?.id, 
       status: UserStatus.AGENCY, 
@@ -194,33 +224,6 @@ class DBService {
   async updateUserRewardConfig(userId: string, config: any, actor: User): Promise<{ ok: boolean }> {
     const { error } = await supabase.from('users').update({ manual_base_amount_override: config.manualBaseAmountOverride, manual_rate_override: config.manualRateOverride }).eq('id', userId);
     return { ok: !error };
-  }
-
-  // Added missing methods for agency applications
-  async getPendingApplications(): Promise<User[]> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('agency_application_status', AgencyApplicationStatus.PENDING)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(u => this.mapUser(u));
-  }
-
-  async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.APPROVED })
-      .eq('login_id', loginId);
-    return { ok: !error, message: error?.message };
-  }
-
-  async rejectApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
-    const { error } = await supabase
-      .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.NONE })
-      .eq('login_id', loginId);
-    return { ok: !error, message: error?.message };
   }
 
   private mapUser(u: any): User {
