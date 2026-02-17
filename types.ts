@@ -49,9 +49,9 @@ export enum MallOpeningStatus {
 }
 
 export interface User {
-  id: string; // 固定のPA番号 (Primary Key)
+  id: string; // 内部管理用 UUID (Primary Key)
   auth_uid?: string; // Supabase Auth の UID
-  loginId: string;
+  loginId: string; // 顧客ID (PA0001など)
   email: string;
   role: UserRole;
   status: UserStatus;

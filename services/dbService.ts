@@ -159,8 +159,8 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      id: nextId, 
-      login_id: nextId,
+      // id は DB 側で自動生成 (UUID)
+      login_id: nextId, 
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
@@ -201,13 +201,13 @@ class DBService {
     if (!existingUser) {
       // 存在しない場合は新規作成（申請中ステータスで作成）
       const newUser = {
-        id: caseData.id, 
+        // id は DB 側で自動生成 (UUID)
         login_id: caseData.id,
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
         role: UserRole.AGENCY,
         status: UserStatus.CUSTOMER,
-        referrer_id: actor.id,
+        referrer_id: actor.id, // actor.id は UUID
         agency_application_status: AgencyApplicationStatus.PENDING,
         created_at: new Date().toISOString()
       };
