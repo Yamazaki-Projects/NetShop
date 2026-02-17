@@ -159,13 +159,13 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      // id は DB 側で自動生成 (UUID)
+      // id カラム (UUID) は省略してDB側で自動生成させる
       login_id: nextId, 
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
       status: UserStatus.CUSTOMER,
-      referrer_id: actor.id,
+      referrer_id: actor.id, // actor.id は UUID
       agency_application_status: AgencyApplicationStatus.NONE,
       created_at: new Date().toISOString()
     };
@@ -201,8 +201,8 @@ class DBService {
     if (!existingUser) {
       // 存在しない場合は新規作成（申請中ステータスで作成）
       const newUser = {
-        // id は DB 側で自動生成 (UUID)
-        login_id: caseData.id,
+        // id カラム (UUID) は省略してDB側で自動生成させる
+        login_id: caseData.id, // 'PA0001' 等の文字列
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
         role: UserRole.AGENCY,
@@ -219,7 +219,7 @@ class DBService {
         .from('users')
         .update({ 
           agency_application_status: AgencyApplicationStatus.PENDING,
-          referrer_id: actor.id,
+          referrer_id: actor.id, // actor.id は UUID
           email: caseData.email, // 連絡先を最新に同期
           name: caseData.companyName || caseData.repName || '新規顧客'
         })
