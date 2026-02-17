@@ -65,20 +65,16 @@ const CaseDetailPage = () => {
   const handleApplyForAgency = async () => {
     console.log("handleApplyForAgency triggered", { customerUser, caseData });
     
-    if (!customerUser) {
-      alert(`診断エラー:\n顧客ID「${caseData.id}」に一致するユーザーレコードがusersテーブルに見つかりません。\n\n確認事項:\n1. usersテーブルに「login_id: ${caseData.id}」の行が存在するか\n2. RLS設定によりアクセスが拒否されていないか`);
-      return;
-    }
-    
+    // ユーザーが存在しない場合でも、applyForAgency 側で自動作成する仕様に変更
     setApplicationLoading(true);
     try {
-      const res = await db.applyForAgency(customerUser.loginId);
+      const res = await db.applyForAgency(caseData, user);
       if (res.ok) {
         alert('代理店昇格申請を送信しました。管理者の承認をお待ちください。');
         await loadData();
       } else {
-        const errorMsg = res.error?.message || "更新された行がありません。";
-        alert(`申請に失敗しました。\n理由: ${errorMsg}\n\nヒント: RLS(行セキュリティ)で、代理店によるusersテーブルの更新が許可されているか確認してください。`);
+        const errorMsg = res.error?.message || "データの更新に失敗しました。";
+        alert(`申請に失敗しました。\n理由: ${errorMsg}\n\nヒント: RLS(行セキュリティ)で、代理店によるusersテーブルの操作が許可されているか確認してください。`);
       }
     } catch (e: any) {
       console.error("Application error:", e);
@@ -257,7 +253,7 @@ const CaseDetailPage = () => {
                     登録コードを再発行する
                   </Button>
                 </div>
-              ) : customerUser?.agencyApplicationStatus === AgencyApplicationStatus.PENDING ? (
+              ) : (customerUser?.agencyApplicationStatus === AgencyApplicationStatus.PENDING) ? (
                 <div style={{ textAlign: 'center' }}>
                   <Badge color="#f59e0b" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>
                     <i className="fa-solid fa-clock"></i> 昇格申請中

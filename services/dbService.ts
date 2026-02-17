@@ -190,14 +190,43 @@ class DBService {
     return data ? this.mapCase(data) : null;
   }
 
-  async applyForAgency(loginId: string): Promise<{ ok: boolean, error?: any }> {
-    const { data, error } = await supabase
+  async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean, error?: any }> {
+    // login_id で既存ユーザーを確認
+    const { data: existingUser } = await supabase
       .from('users')
-      .update({ agency_application_status: AgencyApplicationStatus.PENDING })
-      .eq('login_id', loginId)
-      .select();
-      
-    return { ok: !error && data && data.length > 0, error };
+      .select('id')
+      .eq('login_id', caseData.id)
+      .maybeSingle();
+
+    if (!existingUser) {
+      // 存在しない場合は新規作成（申請中ステータスで作成）
+      const newUser = {
+        id: caseData.id, 
+        login_id: caseData.id,
+        email: caseData.email,
+        name: caseData.companyName || caseData.repName || '新規顧客',
+        role: UserRole.AGENCY,
+        status: UserStatus.CUSTOMER,
+        referrer_id: actor.id,
+        agency_application_status: AgencyApplicationStatus.PENDING,
+        created_at: new Date().toISOString()
+      };
+      const { data, error } = await supabase.from('users').insert([newUser]).select();
+      return { ok: !error && data && data.length > 0, error };
+    } else {
+      // 存在する場合は申請中ステータスに更新
+      const { data, error } = await supabase
+        .from('users')
+        .update({ 
+          agency_application_status: AgencyApplicationStatus.PENDING,
+          referrer_id: actor.id,
+          email: caseData.email, // 連絡先を最新に同期
+          name: caseData.companyName || caseData.repName || '新規顧客'
+        })
+        .eq('login_id', caseData.id)
+        .select();
+      return { ok: !error && data && data.length > 0, error };
+    }
   }
 
   async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
