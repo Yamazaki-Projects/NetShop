@@ -6,7 +6,8 @@ import { supabase } from './supabaseClient.browser';
 
 class DBService {
   private toInternalEmail(loginId: string): string {
-    const trimmedId = loginId.trim();
+    // login_id は常に小文字で扱う
+    const trimmedId = loginId.trim().toLowerCase();
     if (trimmedId.includes('@')) return trimmedId;
     return `${trimmedId}@net-shop.com`;
   }
@@ -37,6 +38,7 @@ class DBService {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session || !session.user) return null;
       
+      // プロフィール取得は auth_uid に一本化
       const { data: profile } = await supabase.from('users')
         .select('*')
         .eq('auth_uid', session.user.id)
@@ -59,29 +61,12 @@ class DBService {
       
       const authUid = authData.user.id;
 
-      let { data: profile } = await supabase.from('users')
+      // ログイン時は auth_uid でのみ検索
+      // 本登録時に Edge Function が auth_uid をセットしているはずなので、ここで新規作成や検索は行わない
+      const { data: profile } = await supabase.from('users')
         .select('*')
         .eq('auth_uid', authUid)
         .maybeSingle();
-
-      if (!profile) {
-        const { data: legacyProfile } = await supabase.from('users')
-          .select('*')
-          .eq('login_id', loginId)
-          .maybeSingle();
-
-        if (legacyProfile) {
-          const { data: updatedProfile, error: updateError } = await supabase.from('users')
-            .update({ auth_uid: authUid })
-            .eq('id', legacyProfile.id)
-            .select()
-            .single();
-          
-          if (!updateError) {
-            profile = updatedProfile;
-          }
-        }
-      }
         
       return profile ? this.mapUser(profile) : null;
     } catch (e) {
@@ -126,21 +111,21 @@ class DBService {
     const { data: lastCases, error: fetchError } = await supabase
       .from('cases')
       .select('id')
-      .like('id', 'PA%')
+      .ilike('id', 'pa%') // case-insensitive search
       .order('id', { ascending: false })
       .limit(1);
 
-    let nextId = 'PA0001';
+    let nextId = 'pa0001';
     if (!fetchError && lastCases && lastCases.length > 0) {
       const lastIdStr = lastCases[0].id;
-      const currentNum = parseInt(lastIdStr.replace('PA', ''), 10);
+      const currentNum = parseInt(lastIdStr.replace(/pa/i, ''), 10);
       if (!isNaN(currentNum)) {
-        nextId = `PA${String(currentNum + 1).padStart(4, '0')}`;
+        nextId = `pa${String(currentNum + 1).padStart(4, '0')}`;
       }
     }
 
     const dbPayload = {
-      id: nextId,
+      id: nextId, // 小文字で保存
       agency_id: referrerUuid,
       agency_name: actor.name,
       referrer_id: referrerUuid,
@@ -209,15 +194,17 @@ class DBService {
     
     const referrerUuid = me.id;
 
+    const normalizedLoginId = caseData.id.toLowerCase();
+
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
-      .eq('login_id', caseData.id)
+      .eq('login_id', normalizedLoginId)
       .maybeSingle();
 
     if (!existingUser) {
       const newUser = {
-        login_id: caseData.id, 
+        login_id: normalizedLoginId, 
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
         role: UserRole.AGENCY,
@@ -237,7 +224,7 @@ class DBService {
           email: caseData.email, 
           name: caseData.companyName || caseData.repName || '新規顧客'
         })
-        .eq('login_id', caseData.id)
+        .eq('login_id', normalizedLoginId)
         .select();
       return { ok: !error && data && data.length > 0, error };
     }
@@ -252,7 +239,7 @@ class DBService {
         registration_code: code,
         registration_code_used_at: null 
       })
-      .eq('login_id', loginId);
+      .eq('login_id', loginId.toLowerCase());
     return { ok: !error, message: error?.message };
   }
 
@@ -264,7 +251,7 @@ class DBService {
         registration_code: newCode,
         registration_code_used_at: null 
       })
-      .eq('login_id', loginId)
+      .eq('login_id', loginId.toLowerCase())
       .is('registration_code_used_at', null); 
     return { ok: !error, code: newCode };
   }
@@ -291,7 +278,7 @@ class DBService {
 
   async getUserByEmail(email: string): Promise<User | null> {
     if (!email) return null;
-    const { data, error } = await supabase.from('users').select('*').eq('email', email.trim()).maybeSingle();
+    const { data, error } = await supabase.from('users').select('*').eq('email', email.trim().toLowerCase()).maybeSingle();
     if (error) {
       console.error("DB Error fetching user by email:", error);
       return null;
@@ -301,7 +288,7 @@ class DBService {
 
   async getUserByLoginId(loginId: string): Promise<User | null> {
     if (!loginId) return null;
-    const { data, error } = await supabase.from('users').select('*').eq('login_id', loginId.trim()).maybeSingle();
+    const { data, error } = await supabase.from('users').select('*').eq('login_id', loginId.trim().toLowerCase()).maybeSingle();
     if (error) {
       console.error("DB Error fetching user by login_id:", error);
       return null;
@@ -310,7 +297,8 @@ class DBService {
   }
 
   async checkRegistrationEligibility(loginId: string, registrationCode: string): Promise<{ ok: boolean, reason?: string, email?: string }> {
-    const { data: user } = await supabase.from('users').select('*').eq('login_id', loginId).maybeSingle();
+    const normalizedId = loginId.trim().toLowerCase();
+    const { data: user } = await supabase.from('users').select('*').eq('login_id', normalizedId).maybeSingle();
     if (!user) return { ok: false, reason: 'not_found' };
     if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
     if (user.agency_application_status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
@@ -320,21 +308,17 @@ class DBService {
     return { ok: true, email: user.email };
   }
 
-  /**
-   * 代理店本登録を完結させる。
-   * クライアントサイドでの直接的な Auth 登録ではなく、Edge Function を介してサーバーサイドで安全に処理します。
-   * 処理完了後、取得したパスワードを用いて自動的にサインインを行います。
-   */
   async completeRegistration(
     loginId: string,
     registrationCode: string,
     password: string
   ): Promise<{ ok: boolean }> {
+    const normalizedId = loginId.trim().toLowerCase();
     const { data, error } = await supabase.functions.invoke(
       'agency-complete-registration',
       {
         body: {
-          login_id: loginId,
+          login_id: normalizedId,
           registration_code: registrationCode,
           password
         }
@@ -350,7 +334,7 @@ class DBService {
       throw new Error(data?.error || 'registration_failed');
     }
 
-    const email = `${loginId}@net-shop.com`;
+    const email = `${normalizedId}@net-shop.com`;
     const { error: signInError } =
       await supabase.auth.signInWithPassword({ email, password });
 

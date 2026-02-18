@@ -1,3 +1,4 @@
+
 // Supabase Edge Function: agency-complete-registration
 // この関数は JWT 検証を無効化してデプロイする必要があります。
 // 実行コマンド: supabase functions deploy agency-complete-registration --no-verify-jwt
@@ -27,7 +28,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { login_id, registration_code, password }: RegistrationParams = await req.json();
+    const body: RegistrationParams = await req.json();
+    const { registration_code, password } = body;
+    // login_id を小文字に正規化
+    const login_id = body.login_id?.trim().toLowerCase();
 
     // パラメータバリデーション
     if (!login_id || !registration_code || !password) {
@@ -133,6 +137,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3) users テーブルの更新（プロファイルを代理店へ）
+    // login_id を正規化したものを使用して更新
     const { error: upDbErr } = await supabase
       .from("users")
       .update({
