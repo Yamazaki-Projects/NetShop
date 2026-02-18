@@ -1,4 +1,5 @@
-// Fix: Declare Deno global to resolve 'Cannot find name Deno' and 'Cannot find lib definition for deno.ns' errors.
+
+// Fix: Declare Deno global to resolve 'Cannot find name Deno' errors.
 declare const Deno: any;
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -8,15 +9,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Fix: Use Deno.serve (built-in Deno API) for Supabase Edge Functions. 
-Deno.serve(async (req) => {
+interface RegistrationParams {
+  login_id: string;
+  registration_code: string;
+  password?: string;
+}
+
+// Fix: Use Deno.serve with explicit types for req to prevent 'implicitly has any type' errors.
+Deno.serve(async (req: Request) => {
   // CORS プリフライト対応
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { login_id, registration_code, password } = await req.json();
+    const { login_id, registration_code, password }: RegistrationParams = await req.json();
 
     // パラメータバリデーション
     if (!login_id || !registration_code || !password) {
@@ -79,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (cErr) {
       // 既に存在する場合（User already registered等）
-      // listUsers から取得（getUserByEmailがadmin APIに存在しない場合の代替案）
+      // listUsers から取得
       const { data: list, error: lErr } = await supabase.auth.admin.listUsers();
       if (lErr || !list?.users) {
         return new Response(JSON.stringify({ error: "auth_operation_failed", detail: cErr.message }), { 
@@ -88,7 +95,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const existing = list.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
+      const existing = list.users.find((x: any) => x.email?.toLowerCase() === email.toLowerCase());
       if (!existing) {
         return new Response(JSON.stringify({ error: "auth_not_created", detail: cErr.message }), { 
           status: 422, 
