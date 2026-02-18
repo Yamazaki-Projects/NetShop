@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// Migrated to useNavigate for v6 compatibility
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
@@ -8,7 +7,6 @@ import { Card, Button, Input, Badge } from '../components/UI';
 
 const RegistrationPage = () => {
   const { setUser } = useAppContext();
-  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const location = useLocation();
   const [step, setStep] = useState<1 | 2>(1);
@@ -30,7 +28,11 @@ const RegistrationPage = () => {
     setLoading(true);
     setError('');
     try {
-      const result = await db.checkRegistrationEligibility(customerId, regCode.toUpperCase());
+      // 内部的には常に小文字で検証
+      const normalizedId = customerId.trim().toLowerCase();
+      const normalizedCode = regCode.trim().toUpperCase();
+
+      const result = await db.checkRegistrationEligibility(normalizedId, normalizedCode);
       if (result.ok) {
         setStep(2);
       } else {
@@ -54,9 +56,11 @@ const RegistrationPage = () => {
     
     setLoading(true);
     try {
-      const result = await db.completeRegistration(customerId, regCode.toUpperCase(), password);
+      const normalizedId = customerId.trim().toLowerCase();
+      const normalizedCode = regCode.trim().toUpperCase();
+
+      const result = await db.completeRegistration(normalizedId, normalizedCode, password);
       if (result.ok) { 
-        // db.completeRegistration が自動でサインインを行うようになったため、最新のユーザー情報を取得して state にセット
         const u = await db.getCurrentUser();
         setUser(u);
         alert('本登録が完了しました。そのままダッシュボードへ移動します。'); 
@@ -83,14 +87,14 @@ const RegistrationPage = () => {
                 label="顧客ID" 
                 placeholder="PA0001" 
                 value={customerId} 
-                onChange={e => setCustomerId(e.target.value.toUpperCase())} 
+                onChange={e => setCustomerId(e.target.value)} 
                 required 
               />
               <Input 
                 label="登録コード (8桁)" 
                 placeholder="英数字8桁" 
                 value={regCode} 
-                onChange={e => setRegCode(e.target.value.toUpperCase())} 
+                onChange={e => setRegCode(e.target.value)} 
                 required 
               />
               {error && (
@@ -107,7 +111,7 @@ const RegistrationPage = () => {
             <form onSubmit={handleRegister}>
               <div style={{ textAlign: 'center', marginBottom: '24px', background: 'var(--bg-main)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800, marginBottom: '4px' }}>登録対象ID</div>
-                <Badge color="var(--primary)" style={{ fontSize: '1rem', padding: '8px 16px' }}>{customerId}</Badge>
+                <Badge color="var(--primary)" style={{ fontSize: '1rem', padding: '8px 16px' }}>{customerId.toUpperCase()}</Badge>
               </div>
               <Input 
                 label="新しいパスワード" 

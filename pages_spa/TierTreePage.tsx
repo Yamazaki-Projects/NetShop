@@ -1,99 +1,51 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-// Migrated to useNavigate for v6 compatibility
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { User, UserStatus, UserRole, AgencyApplicationStatus, Case } from '../types';
 import { Badge, Button } from '../components/UI';
 
-// ノードの型定義（ユーザーまたは案件）
-type TreeElement = 
-  | { type: 'user'; data: User }
-  | { type: 'case'; data: Case };
-
-// Added key?: React.Key to props to fix TS error in recursive calls and parent usage
-const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: { 
-  element: TreeElement; 
+const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: { 
+  user: User; 
   level: number; 
   isAdmin: boolean; 
   currentUser: User; 
   allUsers: User[]; 
   allCases: Case[];
-  key?: React.Key;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
 
-  // 子要素（紹介したユーザー + 紹介した案件）を計算
-  const children = useMemo((): TreeElement[] => {
-    if (element.type === 'case') return []; // 案件は末端ノード
+  // 子要素は User テーブルの紹介関係のみを追う
+  const children = useMemo(() => {
+    return allUsers.filter(u => u.referrerId === user.id && u.id !== user.id);
+  }, [user.id, allUsers]);
 
-    const userId = element.data.id;
-    const subUsers: TreeElement[] = allUsers
-      .filter(u => u.referrerId === userId && u.id !== userId)
-      .map(u => ({ type: 'user', data: u }));
-    
-    const subCases: TreeElement[] = allCases
-      .filter(c => c.referrerId === userId)
-      .map(c => ({ type: 'case', data: c }));
+  const isSelf = currentUser.id === user.id;
 
-    return [...subUsers, ...subCases];
-  }, [element, allUsers, allCases]);
+  // 紐付く案件情報を取得（表示用）
+  const associatedCase = useMemo(() => {
+    return allCases.find(c => c.id.toLowerCase() === user.loginId.toLowerCase());
+  }, [user.loginId, allCases]);
 
-  const isSelf = element.type === 'user' && currentUser.id === element.data.id;
-
-  // ユーザーステータスから表示情報を取得する共通関数
-  const getStatusInfo = (targetUser?: User) => {
-    if (!targetUser) return { label: '顧客', color: '#94a3b8', icon: 'fa-user', bg: 'var(--bg-card)' };
-    
-    if (targetUser.role === UserRole.ADMIN) {
+  const getStatusInfo = () => {
+    if (user.role === UserRole.ADMIN) {
       return { label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.1)' };
     }
-    
-    if (targetUser.status === UserStatus.AGENCY) {
+    if (user.status === UserStatus.AGENCY) {
       return { label: '代理店', color: 'var(--text-main)', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.1)' };
     }
-    
-    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
+    if (user.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
       return { label: '承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.1)' };
     }
-
-    if (targetUser.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
+    if (user.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
       return { label: '申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.1)' };
     }
-    
     return { label: '顧客', color: '#94a3b8', icon: 'fa-user', bg: 'var(--bg-card)' };
   };
 
-  // 表示用情報の計算
-  const getDisplayInfo = () => {
-    if (element.type === 'case') {
-      const c = element.data;
-      const associatedUser = allUsers.find(u => u.email === c.email);
-      const statusInfo = getStatusInfo(associatedUser);
-      
-      return {
-        ...statusInfo,
-        name: c.companyName || c.repName || '名称未設定',
-        id: c.id,
-        icon: 'fa-briefcase',
-        isCase: true
-      };
-    }
-
-    const u = element.data;
-    const statusInfo = getStatusInfo(u);
-    return {
-      ...statusInfo,
-      name: u.name,
-      id: u.loginId,
-      isCase: false
-    };
-  };
-
-  const info = getDisplayInfo();
+  const info = getStatusInfo();
 
   return (
     <div style={{ 
@@ -120,10 +72,10 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
         position: 'relative',
         zIndex: 1,
         maxWidth: '580px',
-        cursor: info.isCase ? 'pointer' : 'default'
+        cursor: associatedCase ? 'pointer' : 'default'
       }}
       className="tree-node-hover"
-      onClick={() => info.isCase && navigate(`/cases/${element.data.id}`)}
+      onClick={() => associatedCase && navigate(`/cases/${associatedCase.id}`)}
       >
         <div 
           onClick={(e) => {
@@ -164,22 +116,30 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
           boxShadow: isSelf ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none',
           border: isSelf ? 'none' : '1px solid var(--border)'
         }}>
-          <i className={`fa-solid ${info.icon}`}></i>
+          <i className={`fa-solid ${associatedCase ? 'fa-briefcase' : info.icon}`}></i>
         </div>
 
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
             <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {info.name}
+              {associatedCase?.companyName || user.name}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)', background: 'var(--bg-main)', padding: '1px 6px', borderRadius: '4px', border: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
-              {info.id}
+              {user.loginId}
             </span>
             {isSelf && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>あなた</Badge>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
              <i className={`fa-solid ${info.icon}`} style={{ fontSize: '0.65rem', color: info.color }}></i>
              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: info.color }}>{info.label}</span>
+             {associatedCase && (
+               <>
+                 <span style={{ color: 'var(--border)', fontSize: '0.7rem' }}>|</span>
+                 <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-sub)' }}>
+                   楽天: {associatedCase.mallProgress.rakuten}
+                 </span>
+               </>
+             )}
           </div>
         </div>
 
@@ -188,22 +148,22 @@ const TreeNode = ({ element, level, isAdmin, currentUser, allUsers, allCases }: 
             variant="ghost" 
             onClick={(e) => { 
               e.stopPropagation(); 
-              if (info.isCase) navigate(`/cases/${element.data.id}`);
+              if (associatedCase) navigate(`/cases/${associatedCase.id}`);
               else navigate(isAdmin ? `/agencies` : `/cases`);
             }} 
             style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)' }}
           >
-            {info.isCase ? '詳細' : (isAdmin ? '管理' : '顧客一覧')}
+            詳細
           </Button>
         )}
       </div>
 
       {isExpanded && children.length > 0 && (
         <div style={{ marginTop: '12px' }}>
-          {children.map((child, idx) => (
+          {children.map((child) => (
             <TreeNode 
-              key={child.type + child.data.id + idx} 
-              element={child} 
+              key={child.id} 
+              user={child} 
               level={level + 1} 
               isAdmin={isAdmin} 
               currentUser={currentUser}
@@ -242,14 +202,13 @@ const TierTreePage = () => {
     loadData();
   }, []);
 
-  const rootElements = useMemo((): TreeElement[] => {
+  const roots = useMemo(() => {
     if (!user) return [];
     if (user.role === UserRole.ADMIN) {
-      return allUsers
-        .filter(u => !u.referrerId || u.role === UserRole.ADMIN)
-        .map(u => ({ type: 'user', data: u }));
+      // 管理者の場合は最上位（紹介者がいない、または管理者の直系）を表示
+      return allUsers.filter(u => !u.referrerId || u.role === UserRole.ADMIN);
     }
-    return [{ type: 'user', data: user }];
+    return [user];
   }, [allUsers, user]);
 
   if (loading || !user) {
@@ -290,7 +249,6 @@ const TierTreePage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9' }}><i className="fa-solid fa-user-check"></i> 承認済</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}><i className="fa-solid fa-clock"></i> 申請中</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8' }}><i className="fa-solid fa-user"></i> 顧客</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-sub)', borderLeft: '1px solid var(--border)', paddingLeft: '12px' }}><i className="fa-solid fa-briefcase"></i> 案件（顧客）</div>
         </div>
       </header>
 
@@ -304,10 +262,10 @@ const TierTreePage = () => {
         backgroundImage: 'radial-gradient(var(--border) 1px, transparent 1px)',
         backgroundSize: '30px 30px'
       }}>
-        {rootElements.length > 0 ? rootElements.map((root, idx) => (
+        {roots.length > 0 ? roots.map((root) => (
           <TreeNode 
-            key={root.type + root.data.id + idx} 
-            element={root} 
+            key={root.id} 
+            user={root} 
             level={0} 
             isAdmin={user.role === UserRole.ADMIN} 
             currentUser={user}
@@ -316,8 +274,7 @@ const TierTreePage = () => {
           />
         )) : (
           <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-sub)' }}>
-            <i className="fa-solid fa-sitemap" style={{ fontSize: '3rem', opacity: 0.1, marginBottom: '20px' }}></i>
-            <p style={{ fontWeight: 700 }}>表示可能な組織データがありません。</p>
+            <p style={{ fontWeight: 700 }}>表示可能なデータがありません。</p>
           </div>
         )}
       </div>
