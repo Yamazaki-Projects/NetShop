@@ -322,24 +322,41 @@ class DBService {
 
   /**
    * 代理店本登録を完結させる。
-   * クライアントサイドでの Auth 登録ではなく、Edge Function を介してサーバーサイドで安全に処理します。
+   * クライアントサイドでの直接的な Auth 登録ではなく、Edge Function を介してサーバーサイドで安全に処理します。
+   * 処理完了後、取得したパスワードを用いて自動的にサインインを行います。
    */
-  async completeRegistration(loginId: string, registrationCode: string, password: string): Promise<{ ok: boolean }> {
-    const { data, error } = await supabase.functions.invoke('agency-complete-registration', {
-      body: { 
-        login_id: loginId, 
-        registration_code: registrationCode, 
-        password 
+  async completeRegistration(
+    loginId: string,
+    registrationCode: string,
+    password: string
+  ): Promise<{ ok: boolean }> {
+    const { data, error } = await supabase.functions.invoke(
+      'agency-complete-registration',
+      {
+        body: {
+          login_id: loginId,
+          registration_code: registrationCode,
+          password
+        }
       }
-    });
+    );
 
     if (error) {
-      console.error("Edge Function error:", error);
+      console.error('Edge Function error', error);
       throw error;
     }
 
-    if (data?.error) {
-      throw new Error(data.error);
+    if (!data?.ok) {
+      throw new Error(data?.error || 'registration_failed');
+    }
+
+    const email = `${loginId}@net-shop.com`;
+    const { error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
+      console.error('Sign-in failed', signInError);
+      throw signInError;
     }
 
     return { ok: true };

@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from 'react';
 // Migrated to useNavigate for v6 compatibility
 import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { Card, Button, Input, Badge } from '../components/UI';
 
 const RegistrationPage = () => {
+  const { setUser } = useAppContext();
   // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,8 +56,11 @@ const RegistrationPage = () => {
     try {
       const result = await db.completeRegistration(customerId, regCode.toUpperCase(), password);
       if (result.ok) { 
-        alert('本登録が完了しました。設定したパスワードでログインしてください。'); 
-        navigate('/login'); 
+        // db.completeRegistration が自動でサインインを行うようになったため、最新のユーザー情報を取得して state にセット
+        const u = await db.getCurrentUser();
+        setUser(u);
+        alert('本登録が完了しました。そのままダッシュボードへ移動します。'); 
+        navigate('/'); 
       }
     } catch (err: any) { 
       setError('登録処理中にエラーが発生しました。'); 

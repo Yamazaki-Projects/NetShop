@@ -1,4 +1,6 @@
-/// <reference lib="deno.ns" />
+// Fix: Declare Deno global to resolve 'Cannot find name Deno' and 'Cannot find lib definition for deno.ns' errors.
+declare const Deno: any;
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -7,7 +9,6 @@ const corsHeaders = {
 };
 
 // Fix: Use Deno.serve (built-in Deno API) for Supabase Edge Functions. 
-// The triple-slash reference at the top of the file resolves 'Cannot find name Deno' errors.
 Deno.serve(async (req) => {
   // CORS プリフライト対応
   if (req.method === "OPTIONS") {
