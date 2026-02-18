@@ -1,4 +1,15 @@
-
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.97.0"
+  }
+}
+</script>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -71,90 +82,4 @@
         text-align: center;
       }
       .btn-primary { background: var(--grad-primary); color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
-      .btn-primary:hover { transform: translateY(-1px); opacity: 0.95; }
-      
-      .btn-ghost { background: transparent; color: var(--text-sub); }
-      .btn-ghost:hover { background: rgba(255,255,255,0.05); color: var(--text-main); }
-
-      .input-field {
-        width: 100%;
-        padding: 14px 18px;
-        border-radius: 12px;
-        border: 1.5px solid var(--border);
-        background-color: var(--bg-input);
-        color: var(--text-main) !important;
-        transition: var(--transition);
-        font-size: 1rem;
-        font-family: inherit;
-        text-align: left;
-        outline: none;
-      }
-      .input-field:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
-      }
-      /* Ensure option text is visible */
-      .input-field option {
-        background-color: var(--bg-card);
-        color: var(--text-main);
-      }
-
-      .align-left { text-align: left !important; }
-      .align-center { text-align: center !important; }
-      .align-right { text-align: right !important; }
-
-      table { width: 100%; border-collapse: collapse; }
-      th { 
-        padding: 16px 24px; 
-        font-size: 0.75rem; 
-        text-transform: uppercase; 
-        color: var(--text-sub); 
-        border-bottom: 1px solid var(--border);
-        font-weight: 800;
-        letter-spacing: 0.05em;
-      }
-      td { padding: 20px 24px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-
-      .card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        overflow: hidden;
-        transition: background-color 0.5s ease, border-color 0.5s ease;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-
-      .sidebar {
-        width: 280px;
-        background-color: var(--bg-sidebar);
-        border-right: 1px solid rgba(255,255,255,0.05);
-        display: flex;
-        flex-direction: column;
-        color: white;
-        transition: background-color 0.4s ease;
-      }
-    </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.45.0",
-    "deno.ns": "https://esm.sh/deno.ns@^0.8.0"
-  }
-}
-</script>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-</body>
-</html>
+      .btn-primary:hover {

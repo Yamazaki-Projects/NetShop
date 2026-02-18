@@ -1,5 +1,6 @@
-// Fix: Declare Deno global to resolve 'Cannot find name Deno' errors.
-declare const Deno: any;
+// Supabase Edge Function: agency-complete-registration
+// この関数は JWT 検証を無効化してデプロイする必要があります。
+// 実行コマンド: supabase functions deploy agency-complete-registration --no-verify-jwt
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -15,10 +16,9 @@ interface RegistrationParams {
   password?: string;
 }
 
-// Fix: Use Deno.serve (built-in Deno API) for Supabase Edge Functions.
+// @ts-ignore: Deno is available in the Edge Function environment
 Deno.serve(async (req: Request) => {
   // CORS プリフライト対応
-  // レスポンスには必ず CORS ヘッダーを含め、200 OK を返却します。
   if (req.method === "OPTIONS") {
     return new Response("ok", { 
       status: 200, 
@@ -44,7 +44,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // @ts-ignore
     const url = Deno.env.get("SUPABASE_URL")!;
+    // @ts-ignore
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(url, serviceRole);
 
@@ -88,7 +90,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (cErr) {
-      // 既に存在する場合
+      // 既に存在する場合（User already registered等）
       const { data: list, error: lErr } = await supabase.auth.admin.listUsers();
       if (lErr || !list?.users) {
         return new Response(JSON.stringify({ error: "auth_operation_failed", detail: cErr.message }), { 
