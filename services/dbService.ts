@@ -191,6 +191,21 @@ class DBService {
   }
 
   async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean, error?: any }> {
+    // 【最重要】現在ログインしている上位代理店(actor)の UUID を DB から確実に取得する
+    // actor.id が UUID であることを期待するが、念のため最新のセッションから auth_uid を用いて再確認する。
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return { ok: false, error: { message: "セッションが見つかりません。" } };
+
+    const { data: me } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_uid', session.user.id)
+      .maybeSingle();
+
+    if (!me) return { ok: false, error: { message: "現在のユーザープロフィールが見つかりません。" } };
+    
+    const referrerUuid = me.id; // これが確実に users.id (UUID)
+
     // login_id で既存ユーザーを確認
     const { data: existingUser } = await supabase
       .from('users')
@@ -201,13 +216,13 @@ class DBService {
     if (!existingUser) {
       // 存在しない場合は新規作成（申請中ステータスで作成）
       const newUser = {
-        // id カラム (UUID) は省略してDB側で自動生成させる
-        login_id: caseData.id, // 'PA0001' 等の文字列
+        // id カラム (UUID) は省略してDB側で自動生成（PA番号は login_id へ）
+        login_id: caseData.id, 
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
         role: UserRole.AGENCY,
         status: UserStatus.CUSTOMER,
-        referrer_id: actor.id, // actor.id は UUID
+        referrer_id: referrerUuid, 
         agency_application_status: AgencyApplicationStatus.PENDING,
         created_at: new Date().toISOString()
       };
@@ -219,8 +234,8 @@ class DBService {
         .from('users')
         .update({ 
           agency_application_status: AgencyApplicationStatus.PENDING,
-          referrer_id: actor.id, // actor.id は UUID
-          email: caseData.email, // 連絡先を最新に同期
+          referrer_id: referrerUuid, // UUID を使用
+          email: caseData.email, 
           name: caseData.companyName || caseData.repName || '新規顧客'
         })
         .eq('login_id', caseData.id)
