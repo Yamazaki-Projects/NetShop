@@ -1,4 +1,3 @@
-
 {
   "compilerOptions": {
     "target": "ESNext",
@@ -18,5 +17,5 @@
     "esModuleInterop": true
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": ["node_modules", "dist", "src/app", "supabase"]
+  "exclude": ["node_modules", "dist", "**/supabase/**", "supabase"]
 }
