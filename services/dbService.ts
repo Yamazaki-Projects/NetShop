@@ -115,7 +115,6 @@ class DBService {
   }
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
-    // 【最重要】上位代理店の UUID を取得
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error("セッションが見つかりません。");
     const { data: me } = await supabase.from('users').select('id').eq('auth_uid', session.user.id).maybeSingle();
@@ -166,7 +165,6 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      // id は DB 側で自動生成 (UUID)
       login_id: nextId, 
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
@@ -198,7 +196,6 @@ class DBService {
   }
 
   async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean, error?: any }> {
-    // 【最重要】セッションから auth_uid を取得し、それを使って自身の users.id (UUID) を取得する
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return { ok: false, error: { message: "セッションが見つかりません。" } };
 
@@ -210,9 +207,8 @@ class DBService {
 
     if (!me) return { ok: false, error: { message: "現在のユーザープロフィールが見つかりません。" } };
     
-    const referrerUuid = me.id; // これが確実に users.id (UUID)
+    const referrerUuid = me.id;
 
-    // login_id で既存ユーザーを確認
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
@@ -220,9 +216,7 @@ class DBService {
       .maybeSingle();
 
     if (!existingUser) {
-      // 存在しない場合は新規作成（申請中ステータスで作成）
       const newUser = {
-        // id カラム (UUID) は省略してDB側で自動生成させる
         login_id: caseData.id, 
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
@@ -235,12 +229,11 @@ class DBService {
       const { data, error } = await supabase.from('users').insert([newUser]).select();
       return { ok: !error && data && data.length > 0, error };
     } else {
-      // 存在する場合は申請中ステータスに更新
       const { data, error } = await supabase
         .from('users')
         .update({ 
           agency_application_status: AgencyApplicationStatus.PENDING,
-          referrer_id: referrerUuid, // UUID を使用
+          referrer_id: referrerUuid, 
           email: caseData.email, 
           name: caseData.companyName || caseData.repName || '新規顧客'
         })
@@ -327,23 +320,29 @@ class DBService {
     return { ok: true, email: user.email };
   }
 
+  /**
+   * 代理店本登録を完結させる。
+   * クライアントサイドでの Auth 登録ではなく、Edge Function を介してサーバーサイドで安全に処理します。
+   */
   async completeRegistration(loginId: string, registrationCode: string, password: string): Promise<{ ok: boolean }> {
-    const check = await this.checkRegistrationEligibility(loginId, registrationCode);
-    if (!check.ok) throw new Error(check.reason);
+    const { data, error } = await supabase.functions.invoke('agency-complete-registration', {
+      body: { 
+        login_id: loginId, 
+        registration_code: registrationCode, 
+        password 
+      }
+    });
 
-    const email = this.toInternalEmail(loginId);
-    
-    const { data: authUser, error: signUpError } = await supabase.auth.signUp({ email, password });
-    if (signUpError) throw signUpError;
+    if (error) {
+      console.error("Edge Function error:", error);
+      throw error;
+    }
 
-    const { error } = await supabase.from('users').update({ 
-      auth_uid: authUser.user?.id, 
-      status: UserStatus.AGENCY, 
-      role: UserRole.AGENCY,
-      registration_code_used_at: new Date().toISOString()
-    }).eq('login_id', loginId);
-    
-    return { ok: !error };
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return { ok: true };
   }
 
   async updateUserRewardConfig(userId: string, config: any, actor: User): Promise<{ ok: boolean }> {
