@@ -115,7 +115,14 @@ class DBService {
   }
 
   async createCase(newCaseData: any, actor: User): Promise<Case | null> {
-    const rate = await this.calculateRate(actor.id);
+    // 【最重要】上位代理店の UUID を取得
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error("セッションが見つかりません。");
+    const { data: me } = await supabase.from('users').select('id').eq('auth_uid', session.user.id).maybeSingle();
+    if (!me) throw new Error("プロフィールが見つかりません。");
+    const referrerUuid = me.id;
+
+    const rate = await this.calculateRate(referrerUuid);
     
     const { data: lastCases, error: fetchError } = await supabase
       .from('cases')
@@ -135,9 +142,9 @@ class DBService {
 
     const dbPayload = {
       id: nextId,
-      agency_id: actor.id,
+      agency_id: referrerUuid,
       agency_name: actor.name,
-      referrer_id: actor.id,
+      referrer_id: referrerUuid,
       status: CaseStatus.DRAFT,
       platform: PlatformType.RAKUTEN,
       base_amount: 198000,
@@ -159,13 +166,13 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      // id カラム (UUID) は省略してDB側で自動生成させる
+      // id は DB 側で自動生成 (UUID)
       login_id: nextId, 
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
       status: UserStatus.CUSTOMER,
-      referrer_id: actor.id, // actor.id は UUID
+      referrer_id: referrerUuid, 
       agency_application_status: AgencyApplicationStatus.NONE,
       created_at: new Date().toISOString()
     };
@@ -191,8 +198,7 @@ class DBService {
   }
 
   async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean, error?: any }> {
-    // 【最重要】現在ログインしている上位代理店(actor)の UUID を DB から確実に取得する
-    // actor.id が UUID であることを期待するが、念のため最新のセッションから auth_uid を用いて再確認する。
+    // 【最重要】セッションから auth_uid を取得し、それを使って自身の users.id (UUID) を取得する
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return { ok: false, error: { message: "セッションが見つかりません。" } };
 
@@ -216,7 +222,7 @@ class DBService {
     if (!existingUser) {
       // 存在しない場合は新規作成（申請中ステータスで作成）
       const newUser = {
-        // id カラム (UUID) は省略してDB側で自動生成（PA番号は login_id へ）
+        // id カラム (UUID) は省略してDB側で自動生成させる
         login_id: caseData.id, 
         email: caseData.email,
         name: caseData.companyName || caseData.repName || '新規顧客',
