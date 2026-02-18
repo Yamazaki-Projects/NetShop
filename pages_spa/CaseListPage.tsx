@@ -1,15 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-// Migrated to useNavigate for v6 compatibility
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { CaseStatus, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User } from '../types';
-import { Card, Input, Button, Badge } from '../components/UI';
+import { Card, Input, Button, Badge, Select } from '../components/UI';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
-  // Migrated to useNavigate for v6 compatibility
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'mine' | 'team'>('mine');
   const [search, setSearch] = useState('');
@@ -19,21 +17,39 @@ const CaseListPage = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!user) return;
-      setLoading(true);
+  // 新規登録モーダル用ステート
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [newCaseForm, setNewCaseForm] = useState({
+    companyName: '',
+    repName: '',
+    email: '',
+    customerType: 'corporation' as 'corporation' | 'sole_proprietor',
+    phone: ''
+  });
+
+  const loadData = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
       const [m, t, u] = await Promise.all([db.getCases(user), db.getTeamCases(user), db.getUsers()]);
       setMyCases(m);
       setTeamCases(t);
       setAllUsers(u);
+    } catch (e) {
+      console.error("Failed to load cases", e);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, [user]);
 
-  const renderStatusBadge = (email: string) => {
-    const u = allUsers.find(x => x.email === email);
+  const renderStatusBadge = (email: string, caseId: string) => {
+    // login_id または email で検索
+    const u = allUsers.find(x => x.loginId.toLowerCase() === caseId.toLowerCase() || x.email === email);
     if (!u) return <Badge color="#94a3b8">顧客</Badge>;
     if (u.status === UserStatus.AGENCY) return <Badge color="#10b981">代理店</Badge>;
     if (u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
@@ -43,14 +59,35 @@ const CaseListPage = () => {
 
   const filteredCases = useMemo(() => {
     const cases = activeTab === 'mine' ? myCases : teamCases;
-    return cases.filter(c => (c.customerName || '').toLowerCase().includes(search.toLowerCase()) || (c.companyName || '').toLowerCase().includes(search.toLowerCase()));
+    return cases.filter(c => 
+      (c.customerName || '').toLowerCase().includes(search.toLowerCase()) || 
+      (c.companyName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.id || '').toLowerCase().includes(search.toLowerCase())
+    );
   }, [activeTab, myCases, teamCases, search]);
+
+  const handleCreateCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setCreateLoading(true);
+    try {
+      const created = await db.createCase(newCaseForm, user);
+      if (created) {
+        setShowCreateModal(false);
+        navigate(`/cases/${created.id}`);
+      }
+    } catch (e: any) {
+      alert("登録に失敗しました: " + e.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   return (
     <div className="animate-fade-in">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
         <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>顧客管理</h1>
-        <Button onClick={() => {}}>+ 新規顧客登録</Button>
+        <Button onClick={() => setShowCreateModal(true)}>+ 新規顧客登録</Button>
       </header>
 
       <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
@@ -59,12 +96,14 @@ const CaseListPage = () => {
       </div>
 
       <div style={{ marginBottom: '24px' }}>
-        <Input placeholder="名前や会社名で検索..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="名前、会社名、顧客IDで検索..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <Card>
         {loading ? (
           <div style={{ padding: '64px', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+        ) : filteredCases.length === 0 ? (
+          <div style={{ padding: '64px', textAlign: 'center', color: 'var(--text-sub)', fontWeight: 700 }}>表示可能な案件がありません。</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table>
@@ -81,12 +120,12 @@ const CaseListPage = () => {
                   <tr key={c.id} onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td className="align-left">
                       <div style={{ fontWeight: 800 }}>{c.customerName}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{c.id}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{c.id.toUpperCase()}</div>
                     </td>
                     <td className="align-center">
                       <Badge color={c.mallProgress.rakuten === MallOpeningStatus.OPENED ? '#10b981' : '#94a3b8'}>{c.mallProgress.rakuten}</Badge>
                     </td>
-                    <td className="align-center">{renderStatusBadge(c.email)}</td>
+                    <td className="align-center">{renderStatusBadge(c.email, c.id)}</td>
                     <td className="align-right" style={{ color: 'var(--text-sub)', fontWeight: 700 }}>{new Date(c.updatedAt).toLocaleDateString()}</td>
                   </tr>
                 ))}
@@ -95,6 +134,59 @@ const CaseListPage = () => {
           </div>
         )}
       </Card>
+
+      {/* 新規登録モーダル */}
+      {showCreateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <Card style={{ width: '100%', maxWidth: '500px', padding: '40px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }} title="新規顧客登録">
+            <form onSubmit={handleCreateCase}>
+              <Select 
+                label="顧客区分" 
+                value={newCaseForm.customerType} 
+                onChange={e => setNewCaseForm({...newCaseForm, customerType: e.target.value as any})}
+              >
+                <option value="corporation">法人</option>
+                <option value="sole_proprietor">個人事業主</option>
+              </Select>
+              
+              <Input 
+                label={newCaseForm.customerType === 'corporation' ? "会社名" : "屋号"} 
+                required 
+                value={newCaseForm.companyName} 
+                onChange={e => setNewCaseForm({...newCaseForm, companyName: e.target.value})} 
+              />
+              
+              <Input 
+                label="代表者氏名" 
+                required 
+                value={newCaseForm.repName} 
+                onChange={e => setNewCaseForm({...newCaseForm, repName: e.target.value})} 
+              />
+              
+              <Input 
+                label="メールアドレス" 
+                type="email" 
+                required 
+                value={newCaseForm.email} 
+                onChange={e => setNewCaseForm({...newCaseForm, email: e.target.value})} 
+              />
+
+              <Input 
+                label="電話番号" 
+                value={newCaseForm.phone} 
+                onChange={e => setNewCaseForm({...newCaseForm, phone: e.target.value})} 
+              />
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+                <Button variant="ghost" onClick={() => setShowCreateModal(false)} style={{ flex: 1 }}>キャンセル</Button>
+                <Button type="submit" disabled={createLoading} style={{ flex: 2 }}>
+                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '顧客を登録する'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

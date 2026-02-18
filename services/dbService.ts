@@ -37,7 +37,6 @@ class DBService {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session || !session.user) return null;
       
-      // 常に auth_uid でプロファイルを特定
       const { data: profile } = await supabase.from('users')
         .select('*')
         .eq('auth_uid', session.user.id)
@@ -61,7 +60,6 @@ class DBService {
       
       const authUid = authData.user.id;
 
-      // ログイン時は auth_uid でのみ検索（新規作成は行わない）
       const { data: profile } = await supabase.from('users')
         .select('*')
         .eq('auth_uid', authUid)
@@ -93,7 +91,8 @@ class DBService {
   }
 
   async getCaseById(id: string): Promise<Case | null> {
-    const { data, error } = await supabase.from('cases').select('*').eq('id', id.toLowerCase()).maybeSingle();
+    // ilike を使用して大文字小文字の差異を許容する
+    const { data, error } = await supabase.from('cases').select('*').ilike('id', id).maybeSingle();
     if (error) throw error;
     return data ? this.mapCase(data) : null;
   }
@@ -119,14 +118,15 @@ class DBService {
       .order('id', { ascending: false })
       .limit(1);
 
-    let nextId = 'pa0001';
+    let nextIdNum = 1;
     if (!fetchError && lastCases && lastCases.length > 0) {
       const lastIdStr = lastCases[0].id;
       const currentNum = parseInt(lastIdStr.replace(/pa/i, ''), 10);
       if (!isNaN(currentNum)) {
-        nextId = `pa${String(currentNum + 1).padStart(4, '0')}`;
+        nextIdNum = currentNum + 1;
       }
     }
+    const nextId = `pa${String(nextIdNum).padStart(4, '0')}`;
 
     const dbPayload = {
       id: nextId,
@@ -139,12 +139,12 @@ class DBService {
       applied_rate: rate,
       customer_type: newCaseData.customerType,
       company_name: newCaseData.companyName,
-      company_name_kana: newCaseData.companyNameKana,
+      company_name_kana: newCaseData.companyNameKana || '',
       representative_name: newCaseData.repName,
-      representative_name_kana: newCaseData.repNameKana,
+      representative_name_kana: newCaseData.repNameKana || '',
       rep_name: newCaseData.repName,
-      rep_name_kana: newCaseData.repNameKana,
-      phone: newCaseData.phone,
+      rep_name_kana: newCaseData.repNameKana || '',
+      phone: newCaseData.phone || '',
       email: newCaseData.email,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -154,7 +154,7 @@ class DBService {
     if (caseError) throw caseError;
 
     const newUser = {
-      id: nextId, // users.id も案件IDと同じにする
+      id: nextId,
       login_id: nextId, 
       email: newCaseData.email,
       name: newCaseData.companyName || newCaseData.repName,
@@ -180,7 +180,7 @@ class DBService {
       manualAgencyAmount: 'manual_agency_amount', baseAmount: 'base_amount'
     };
     Object.keys(updates).forEach(k => { if (mappings[k]) dbUpdates[mappings[k]] = updates[k]; });
-    const { data, error } = await supabase.from('cases').update(this.normalizePayload(dbUpdates)).eq('id', id.toLowerCase()).select().single();
+    const { data, error } = await supabase.from('cases').update(this.normalizePayload(dbUpdates)).ilike('id', id).select().single();
     if (error) throw error;
     return data ? this.mapCase(data) : null;
   }
@@ -208,7 +208,7 @@ class DBService {
         email: caseData.email, 
         name: caseData.companyName || caseData.repName || '新規顧客'
       })
-      .eq('login_id', normalizedLoginId)
+      .ilike('login_id', normalizedLoginId)
       .select();
       
     return { ok: !error && data && data.length > 0, error };
@@ -223,7 +223,7 @@ class DBService {
         registration_code: code,
         registration_code_used_at: null 
       })
-      .eq('login_id', loginId.toLowerCase());
+      .ilike('login_id', loginId);
     return { ok: !error, message: error?.message };
   }
 
@@ -235,7 +235,7 @@ class DBService {
         registration_code: newCode,
         registration_code_used_at: null 
       })
-      .eq('login_id', loginId.toLowerCase())
+      .ilike('login_id', loginId)
       .is('registration_code_used_at', null); 
     return { ok: !error, code: newCode };
   }
@@ -269,14 +269,13 @@ class DBService {
 
   async getUserByLoginId(loginId: string): Promise<User | null> {
     if (!loginId) return null;
-    const { data, error } = await supabase.from('users').select('*').eq('login_id', loginId.trim().toLowerCase()).maybeSingle();
+    const { data, error } = await supabase.from('users').select('*').ilike('login_id', loginId.trim()).maybeSingle();
     if (error) return null;
     return data ? this.mapUser(data) : null;
   }
 
   async checkRegistrationEligibility(loginId: string, registrationCode: string): Promise<{ ok: boolean, reason?: string, email?: string }> {
-    const normalizedId = loginId.trim().toLowerCase();
-    const { data: user } = await supabase.from('users').select('*').eq('login_id', normalizedId).maybeSingle();
+    const { data: user } = await supabase.from('users').select('*').ilike('login_id', loginId.trim()).maybeSingle();
     if (!user) return { ok: false, reason: 'not_found' };
     if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
     if (user.agency_application_status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
