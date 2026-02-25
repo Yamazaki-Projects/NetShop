@@ -86,47 +86,46 @@ Deno.serve(async (req: Request) => {
     // 2) Auth ユーザーの作成または更新
     let authUserId: string | null = null;
 
-    // まず作成を試みる
-    const { data: created, error: cErr } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-
-    if (cErr) {
-      // 既に存在する場合（User already registered等）
-      const { data: list, error: lErr } = await supabase.auth.admin.listUsers();
-      if (lErr || !list?.users) {
-        return new Response(JSON.stringify({ error: "auth_operation_failed", detail: cErr.message }), { 
-          status: 422, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
-      }
-
-      const existing = list.users.find((x: any) => x.email?.toLowerCase() === email.toLowerCase());
-      if (!existing) {
-        return new Response(JSON.stringify({ error: "auth_not_created", detail: cErr.message }), { 
-          status: 422, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
-      }
-
-      authUserId = existing.id;
-
-      // パスワードを更新して有効化
-      const { error: upErr } = await supabase.auth.admin.updateUserById(authUserId, {
+    try {
+      // まず作成を試みる
+      const { data: created, error: cErr } = await supabase.auth.admin.createUser({
+        email,
         password,
         email_confirm: true,
       });
 
-      if (upErr) {
-        return new Response(JSON.stringify({ error: "auth_update_failed", detail: upErr.message }), { 
-          status: 422, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      if (cErr) {
+        // 既に存在する場合（User already registered等）
+        // listUsers で検索を試みる
+        const { data: list, error: lErr } = await supabase.auth.admin.listUsers();
+        if (lErr || !list?.users) {
+          throw new Error(`Auth lookup failed: ${lErr?.message || 'No users list'}. Original error: ${cErr.message}`);
+        }
+
+        const existing = list.users.find((x: any) => x.email?.toLowerCase() === email.toLowerCase());
+        if (!existing) {
+          throw new Error(`Auth user not found after conflict: ${cErr.message}`);
+        }
+
+        authUserId = existing.id;
+
+        // パスワードを更新して有効化
+        const { error: upErr } = await supabase.auth.admin.updateUserById(authUserId, {
+          password,
+          email_confirm: true,
         });
+
+        if (upErr) {
+          throw new Error(`Auth update failed: ${upErr.message}`);
+        }
+      } else {
+        authUserId = created?.user?.id ?? null;
       }
-    } else {
-      authUserId = created?.user?.id ?? null;
+    } catch (authErr: any) {
+      return new Response(JSON.stringify({ error: "auth_operation_failed", detail: authErr.message }), { 
+        status: 422, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
     }
 
     if (!authUserId) {

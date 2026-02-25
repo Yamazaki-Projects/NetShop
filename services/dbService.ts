@@ -291,19 +291,36 @@ class DBService {
     password: string
   ): Promise<{ ok: boolean }> {
     const normalizedId = loginId.trim().toLowerCase();
-    const { data, error } = await supabase.functions.invoke(
-      'agency-complete-registration',
-      {
-        body: {
-          login_id: normalizedId,
-          registration_code: registrationCode,
-          password
-        }
-      }
-    );
+    
+    // Edge Function の URL を構築
+    const { data: { publicUrl } } = supabase.storage.from('dummy').getPublicUrl('');
+    const projectUrl = publicUrl.split('/storage/v1')[0];
+    const functionUrl = `${projectUrl}/functions/v1/agency-complete-registration`;
 
-    if (error) throw error;
-    if (!data?.ok) throw new Error(data?.error || 'registration_failed');
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(supabase as any).supabaseKey}` // 匿名キーまたはサービスロールキー
+      },
+      body: JSON.stringify({
+        login_id: normalizedId,
+        registration_code: registrationCode,
+        password
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error("Registration function error:", result);
+      const errorMsg = result.detail || result.error || 'registration_failed';
+      throw new Error(`登録に失敗しました: ${errorMsg}`);
+    }
+    
+    if (!result.ok) {
+      throw new Error(result.error || 'registration_failed');
+    }
 
     const email = `${normalizedId}@net-shop.com`;
     await supabase.auth.signInWithPassword({ email, password });
