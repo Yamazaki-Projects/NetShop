@@ -50,26 +50,71 @@ class DBService {
 
   async login(loginId: string, pass: string): Promise<User | null> {
     const normalizedLoginId = loginId.trim().toLowerCase();
-    const email = this.toInternalEmail(normalizedLoginId);
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (authError || !authData.user) {
-        console.error("Auth error:", authError);
-        return null;
-      }
-      
-      const authUid = authData.user.id;
+    
+    // 1. ユーザープロファイルを先に取得して、登録されているメールアドレスを確認する
+    const { data: profileByLoginId } = await supabase
+      .from('users')
+      .select('email, auth_uid')
+      .ilike('login_id', normalizedLoginId)
+      .maybeSingle();
 
-      const { data: profile } = await supabase.from('users')
-        .select('*')
-        .eq('auth_uid', authUid)
-        .maybeSingle();
-        
-      return profile ? this.mapUser(profile) : null;
-    } catch (e) {
-      console.error("Login exception:", e);
+    // 試行するメールアドレスのリスト
+    const emailsToTry = new Set<string>();
+    
+    // 入力自体がメールアドレス形式ならそれを最優先
+    if (normalizedLoginId.includes('@')) {
+      emailsToTry.add(normalizedLoginId);
+    } else {
+      // ログインID形式なら、生成された内部メールを最初に入れる
+      emailsToTry.add(`${normalizedLoginId}@net-shop.com`);
+    }
+    
+    // プロファイルが見つかれば、そこに登録されているメールも試行リストに追加
+    if (profileByLoginId?.email) {
+      emailsToTry.add(profileByLoginId.email.toLowerCase());
+    }
+
+    let lastAuthError: any = null;
+    let authUser: any = null;
+
+    // 候補のメールアドレスで順次ログインを試みる
+    for (const email of Array.from(emailsToTry)) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: pass });
+        if (!authError && authData.user) {
+          authUser = authData.user;
+          break;
+        }
+        lastAuthError = authError;
+      } catch (e) {
+        lastAuthError = e;
+      }
+    }
+
+    if (!authUser) {
+      console.error("Login failed for all email candidates. Last error:", lastAuthError);
       return null;
     }
+    
+    const authUid = authUser.id;
+
+    // ログイン成功後、auth_uid でプロファイルを再取得
+    const { data: profile } = await supabase.from('users')
+      .select('*')
+      .eq('auth_uid', authUid)
+      .maybeSingle();
+      
+    // プロファイルが見つからない場合、ログインIDで紐付けを試みる（初回ログイン時などの救済）
+    if (!profile && !normalizedLoginId.includes('@')) {
+      const { data: linkedProfile } = await supabase.from('users')
+        .update({ auth_uid: authUid })
+        .ilike('login_id', normalizedLoginId)
+        .select()
+        .maybeSingle();
+      return linkedProfile ? this.mapUser(linkedProfile) : null;
+    }
+
+    return profile ? this.mapUser(profile) : null;
   }
 
   async getUsers(): Promise<User[]> {
@@ -323,7 +368,13 @@ class DBService {
     }
 
     const email = `${normalizedId}@net-shop.com`;
-    await supabase.auth.signInWithPassword({ email, password });
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    if (loginError) {
+      console.warn("Auto-login after registration failed, but registration was successful:", loginError);
+      // 登録自体は成功しているので、ここではエラーを投げず、ユーザーに手動ログインを促すか、
+      // あるいは login メソッドを再利用して試行する
+      await this.login(normalizedId, password);
+    }
     return { ok: true };
   }
 
