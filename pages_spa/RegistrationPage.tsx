@@ -20,7 +20,7 @@ const RegistrationPage = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const idParam = params.get('id');
-    if (idParam) setCustomerId(idParam.toUpperCase());
+    if (idParam) setCustomerId(idParam.toLowerCase());
   }, [location]);
 
   const handleVerify = async (e: React.FormEvent) => {
@@ -111,7 +111,7 @@ const RegistrationPage = () => {
             <form onSubmit={handleRegister}>
               <div style={{ textAlign: 'center', marginBottom: '24px', background: 'var(--bg-main)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800, marginBottom: '4px' }}>登録対象ID</div>
-                <Badge color="var(--primary)" style={{ fontSize: '1rem', padding: '8px 16px' }}>{customerId.toUpperCase()}</Badge>
+                <Badge color="var(--primary)" style={{ fontSize: '1rem', padding: '8px 16px' }}>{customerId.toLowerCase()}</Badge>
               </div>
               <Input 
                 label="新しいパスワード" 

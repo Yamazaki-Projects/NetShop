@@ -69,7 +69,7 @@ const Dashboard = () => {
       <header style={{ marginBottom: '48px', textAlign: 'left' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>Welcome back, {user.name} <span style={{ color: 'var(--accent)' }}>👋</span></h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: '1.1rem', marginTop: '8px' }}>
-          ログインID: <Badge color="var(--primary)" style={{ fontSize: '0.85rem' }}>{user.loginId}</Badge> として認証されています。
+          ログインID: <Badge color="var(--primary)" style={{ fontSize: '0.85rem' }}>{user.loginId.toLowerCase()}</Badge> として認証されています。
         </p>
       </header>
 
