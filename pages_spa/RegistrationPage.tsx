@@ -67,7 +67,8 @@ const RegistrationPage = () => {
         navigate('/'); 
       }
     } catch (err: any) { 
-      setError('登録処理中にエラーが発生しました。'); 
+      console.error("Registration error:", err);
+      setError(err.message || '登録処理中にエラーが発生しました。'); 
     }
     setLoading(false);
   };

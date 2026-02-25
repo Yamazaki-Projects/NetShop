@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
     const { data: u, error: uErr } = await supabase
       .from("users")
       .select("*")
-      .eq("login_id", login_id)
+      .ilike("login_id", login_id)
       .maybeSingle();
 
     if (uErr || !u) {
@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
         role: "agency",
         registration_code_used_at: new Date().toISOString(),
       })
-      .eq("login_id", login_id);
+      .ilike("login_id", login_id);
 
     if (upDbErr) {
       return new Response(JSON.stringify({ error: "db_update_failed", detail: upDbErr.message }), { 
