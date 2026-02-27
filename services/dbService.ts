@@ -205,7 +205,10 @@ class DBService {
     };
     
     const { data: caseResult, error: caseError } = await supabase.from('cases').insert([this.normalizePayload(dbPayload)]).select().single();
-    if (caseError) throw caseError;
+    if (caseError) {
+      console.error("Case insertion failed:", caseError);
+      throw caseError;
+    }
 
     const newUser = {
       id: nextId,
@@ -218,7 +221,14 @@ class DBService {
       agency_application_status: AgencyApplicationStatus.NONE,
       created_at: new Date().toISOString()
     };
-    await supabase.from('users').insert([newUser]);
+    
+    const { error: userError } = await supabase.from('users').insert([newUser]);
+    if (userError) {
+      console.error("User profile insertion failed:", userError);
+      // 案件は作成されているがユーザー作成に失敗した場合の処理
+      // 本来はトランザクションが望ましいが、SupabaseクライアントではRPCが必要
+      throw new Error(`案件は作成されましたが、ユーザープロファイルの作成に失敗しました: ${userError.message}`);
+    }
 
     return caseResult ? this.mapCase(caseResult) : null;
   }
@@ -311,7 +321,11 @@ class DBService {
     if (uError || !allUsers) return [];
 
     const getDownlineIds = (parentId: string): string[] => {
-      const children = allUsers.filter(u => u.referrer_id === parentId);
+      const children = allUsers.filter(u => 
+        u.referrer_id && 
+        parentId && 
+        u.referrer_id.toLowerCase() === parentId.toLowerCase()
+      );
       let ids = children.map(c => c.id);
       for (const child of children) {
         ids = [...ids, ...getDownlineIds(child.id)];

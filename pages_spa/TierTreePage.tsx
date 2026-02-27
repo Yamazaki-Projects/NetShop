@@ -20,7 +20,12 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
 
   // 子要素は User テーブルの紹介関係のみを追う
   const children = useMemo(() => {
-    return allUsers.filter(u => u.referrerId === user.id && u.id !== user.id);
+    return allUsers.filter(u => 
+      u.referrerId && 
+      user.id && 
+      u.referrerId.toLowerCase() === user.id.toLowerCase() && 
+      u.id.toLowerCase() !== user.id.toLowerCase()
+    );
   }, [user.id, allUsers]);
 
   const isSelf = currentUser.id === user.id;
@@ -236,7 +241,9 @@ const TierTreePage = () => {
       // 管理者の場合は最上位（紹介者がいない、または管理者の直系）を表示
       return allUsers.filter(u => !u.referrerId || u.role === UserRole.ADMIN);
     }
-    return [user];
+    // 自分自身をルートとするが、allUsersから最新の自分を探す
+    const me = allUsers.find(u => u.id.toLowerCase() === user.id.toLowerCase());
+    return me ? [me] : [user];
   }, [allUsers, user]);
 
   const handleAddCustomerClick = (userId: string) => {
