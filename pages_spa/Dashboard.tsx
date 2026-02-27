@@ -64,6 +64,12 @@ const Dashboard = () => {
     .filter(c => c.status === CaseStatus.APPROVED)
     .reduce((sum, c) => sum + c.baseAmount, 0);
 
+  const now = new Date();
+  const currentMonthCount = cases.filter(c => {
+    const d = new Date(c.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '48px', textAlign: 'left' }}>
@@ -82,8 +88,8 @@ const Dashboard = () => {
           </>
         ) : (
           <>
-            <StatCard title="現在の報酬率" value={`${Math.round(currentRate * 100)}%`} icon="fa-percent" gradient="var(--grad-primary)" subtext={`承認数 ${approvedCount}件 に基づく`} />
-            <StatCard title="承認案件数" value={`${approvedCount} 件`} icon="fa-handshake" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
+            <StatCard title="累計直紹介数" value={`${cases.length} 件`} icon="fa-user-plus" gradient="var(--grad-primary)" />
+            <StatCard title="今月の直紹介数" value={`${currentMonthCount} 件`} icon="fa-calendar-check" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
             <StatCard title="確定報酬額" value={`¥${estimatedRevenue.toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
           </>
         )}

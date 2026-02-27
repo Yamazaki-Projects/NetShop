@@ -13,6 +13,7 @@ import TierTreePage from './pages_spa/TierTreePage';
 import RegistrationPage from './pages_spa/RegistrationPage';
 import AgencyListPage from './pages_spa/AgencyListPage';
 import AgencyApprovalPage from './pages_spa/AgencyApprovalPage';
+import ReferralStatsPage from './pages_spa/ReferralStatsPage';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -73,6 +74,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           <SidebarLink to="/" icon="fa-house" label="ダッシュボード" active={location.pathname === '/'} />
           <SidebarLink to="/cases" icon="fa-briefcase" label="顧客管理" active={location.pathname.startsWith('/cases')} />
           <SidebarLink to="/tree" icon="fa-sitemap" label="ティアツリー" active={location.pathname === '/tree'} />
+          <SidebarLink to="/stats" icon="fa-chart-line" label="紹介統計" active={location.pathname === '/stats'} />
           {user.role === UserRole.ADMIN && (
             <>
               <div style={{ margin: '24px 20px 8px', fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Administrator</div>
@@ -126,6 +128,7 @@ export default function App() {
           <Route path="/cases" element={user ? <Layout><CaseListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/approvals" element={user ? <Layout><AgencyApprovalPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/tree" element={user ? <Layout><TierTreePage /></Layout> : <Navigate to="/login" />} />
+          <Route path="/stats" element={user ? <Layout><ReferralStatsPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/agencies" element={user ? <Layout><AgencyListPage /></Layout> : <Navigate to="/login" />} />
           <Route path="/" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" />} />
