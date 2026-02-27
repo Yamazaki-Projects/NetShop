@@ -4,15 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { User, UserStatus, UserRole, AgencyApplicationStatus, Case } from '../types';
-import { Badge, Button } from '../components/UI';
+import { Badge, Button, Card, Input, Select } from '../components/UI';
 
-const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: { 
+const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAddCustomer }: { 
   user: User; 
   level: number; 
   isAdmin: boolean; 
   currentUser: User; 
   allUsers: User[]; 
   allCases: Case[];
+  onAddCustomer: (userId: string) => void;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: {
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',
         zIndex: 1,
-        maxWidth: '580px',
+        maxWidth: '650px',
         cursor: associatedCase ? 'pointer' : 'default'
       }}
       className="tree-node-hover"
@@ -143,19 +144,31 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: {
           </div>
         </div>
 
-        {(isAdmin || isSelf) && (
+        <div style={{ display: 'flex', gap: '8px' }}>
           <Button 
             variant="ghost" 
             onClick={(e) => { 
               e.stopPropagation(); 
-              if (associatedCase) navigate(`/cases/${associatedCase.id}`);
-              else navigate(isAdmin ? `/agencies` : `/cases`);
+              onAddCustomer(user.id);
             }} 
-            style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)' }}
+            style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)', color: 'var(--primary)' }}
           >
-            詳細
+            <i className="fa-solid fa-plus"></i> 顧客追加
           </Button>
-        )}
+          {(isAdmin || isSelf) && (
+            <Button 
+              variant="ghost" 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                if (associatedCase) navigate(`/cases/${associatedCase.id}`);
+                else navigate(isAdmin ? `/agencies` : `/cases`);
+              }} 
+              style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)' }}
+            >
+              詳細
+            </Button>
+          )}
+        </div>
       </div>
 
       {isExpanded && children.length > 0 && (
@@ -169,6 +182,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: {
               currentUser={currentUser}
               allUsers={allUsers}
               allCases={allCases}
+              onAddCustomer={onAddCustomer}
             />
           ))}
         </div>
@@ -179,26 +193,40 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases }: {
 
 const TierTreePage = () => {
   const { user } = useAppContext();
+  const navigate = useNavigate();
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allCases, setAllCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 新規登録モーダル用ステート
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedReferrerId, setSelectedReferrerId] = useState<string | null>(null);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [newCaseForm, setNewCaseForm] = useState({
+    companyName: '',
+    repName: '',
+    email: '',
+    customerType: 'corporation' as 'corporation' | 'sole_proprietor',
+    phone: ''
+  });
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [u, c] = await Promise.all([
+        db.getUsers(),
+        db.getAllCases()
+      ]);
+      setAllUsers(u);
+      setAllCases(c);
+    } catch (e) {
+      console.error("Failed to load tree data", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [u, c] = await Promise.all([
-          db.getUsers(),
-          db.getAllCases()
-        ]);
-        setAllUsers(u);
-        setAllCases(c);
-      } catch (e) {
-        console.error("Failed to load tree data", e);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadData();
   }, []);
 
@@ -211,6 +239,36 @@ const TierTreePage = () => {
     return [user];
   }, [allUsers, user]);
 
+  const handleAddCustomerClick = (userId: string) => {
+    setSelectedReferrerId(userId);
+    setShowCreateModal(true);
+  };
+
+  const handleCreateCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !selectedReferrerId) return;
+    setCreateLoading(true);
+    try {
+      const created = await db.createCase(newCaseForm, user, selectedReferrerId);
+      if (created) {
+        setShowCreateModal(false);
+        setNewCaseForm({
+          companyName: '',
+          repName: '',
+          email: '',
+          customerType: 'corporation',
+          phone: ''
+        });
+        await loadData();
+        alert("顧客を登録しました。");
+      }
+    } catch (e: any) {
+      alert("登録に失敗しました: " + e.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   if (loading || !user) {
     return (
       <div style={{ display: 'flex', height: '60vh', alignItems: 'center', justifyContent: 'center' }}>
@@ -218,6 +276,8 @@ const TierTreePage = () => {
       </div>
     );
   }
+
+  const selectedReferrerName = allUsers.find(u => u.id === selectedReferrerId)?.name || '不明';
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
@@ -271,6 +331,7 @@ const TierTreePage = () => {
             currentUser={user}
             allUsers={allUsers}
             allCases={allCases}
+            onAddCustomer={handleAddCustomerClick}
           />
         )) : (
           <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-sub)' }}>
@@ -278,6 +339,63 @@ const TierTreePage = () => {
           </div>
         )}
       </div>
+
+      {/* 新規登録モーダル */}
+      {showCreateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <Card style={{ width: '100%', maxWidth: '500px', padding: '40px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }} title="新規顧客登録">
+            <div style={{ marginBottom: '24px', padding: '12px', background: 'var(--bg-main)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-sub)', textTransform: 'uppercase', marginBottom: '4px' }}>紹介者</div>
+              <div style={{ fontWeight: 800, color: 'var(--primary)' }}>{selectedReferrerName}</div>
+            </div>
+            <form onSubmit={handleCreateCase}>
+              <Select 
+                label="顧客区分" 
+                value={newCaseForm.customerType} 
+                onChange={e => setNewCaseForm({...newCaseForm, customerType: e.target.value as any})}
+              >
+                <option value="corporation">法人</option>
+                <option value="sole_proprietor">個人事業主</option>
+              </Select>
+              
+              <Input 
+                label={newCaseForm.customerType === 'corporation' ? "会社名" : "屋号"} 
+                required 
+                value={newCaseForm.companyName} 
+                onChange={e => setNewCaseForm({...newCaseForm, companyName: e.target.value})} 
+              />
+              
+              <Input 
+                label="代表者氏名" 
+                required 
+                value={newCaseForm.repName} 
+                onChange={e => setNewCaseForm({...newCaseForm, repName: e.target.value})} 
+              />
+              
+              <Input 
+                label="メールアドレス" 
+                type="email" 
+                required 
+                value={newCaseForm.email} 
+                onChange={e => setNewCaseForm({...newCaseForm, email: e.target.value})} 
+              />
+
+              <Input 
+                label="電話番号" 
+                value={newCaseForm.phone} 
+                onChange={e => setNewCaseForm({...newCaseForm, phone: e.target.value})} 
+              />
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+                <Button variant="ghost" onClick={() => setShowCreateModal(false)} style={{ flex: 1 }}>キャンセル</Button>
+                <Button type="submit" disabled={createLoading} style={{ flex: 2 }}>
+                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '顧客を登録する'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
 
       <style>{`
         .tree-node-hover:hover {

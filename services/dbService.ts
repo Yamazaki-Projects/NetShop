@@ -142,7 +142,7 @@ class DBService {
     return data ? this.mapCase(data) : null;
   }
 
-  async createCase(newCaseData: any, actor: User): Promise<Case | null> {
+  async createCase(newCaseData: any, actor: User, customReferrerId?: string): Promise<Case | null> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error("セッションが見つかりません。");
     
@@ -152,7 +152,16 @@ class DBService {
       .maybeSingle();
       
     if (!me) throw new Error("プロフィールが見つかりません。");
-    const referrerUuid = me.id;
+    
+    // 指定された紹介者IDがあればそれを使用、なければ自分
+    const referrerUuid = customReferrerId || me.id;
+    
+    // 紹介者の名前を取得
+    let referrerName = actor.name;
+    if (customReferrerId && customReferrerId !== me.id) {
+      const { data: refUser } = await supabase.from('users').select('name').eq('id', customReferrerId).maybeSingle();
+      if (refUser) referrerName = refUser.name;
+    }
 
     const rate = await this.calculateRate(referrerUuid);
     
@@ -176,7 +185,7 @@ class DBService {
     const dbPayload = {
       id: nextId,
       agency_id: referrerUuid,
-      agency_name: actor.name,
+      agency_name: referrerName,
       referrer_id: referrerUuid,
       status: CaseStatus.DRAFT,
       platform: PlatformType.RAKUTEN,
@@ -201,7 +210,7 @@ class DBService {
     const newUser = {
       id: nextId,
       login_id: nextId, 
-      email: newCaseData.email,
+      email: this.toInternalEmail(nextId),
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
       status: UserStatus.CUSTOMER,
@@ -250,7 +259,7 @@ class DBService {
       .update({ 
         agency_application_status: AgencyApplicationStatus.PENDING,
         referrer_id: referrerUuid, 
-        email: caseData.email, 
+        email: this.toInternalEmail(caseData.id), 
         name: caseData.companyName || caseData.repName || '新規顧客'
       })
       .ilike('login_id', normalizedLoginId)
@@ -297,10 +306,23 @@ class DBService {
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
-    const { data: downline } = await supabase.from('users').select('id').eq('referrer_id', user.id);
-    const ids = (downline || []).map(u => u.id);
-    if (ids.length === 0) return [];
-    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', ids).order('updated_at', { ascending: false });
+    // 全ユーザーを取得してメモリ上でツリーを辿る（小規模アプリ向けの簡易実装）
+    const { data: allUsers, error: uError } = await supabase.from('users').select('id, referrer_id');
+    if (uError || !allUsers) return [];
+
+    const getDownlineIds = (parentId: string): string[] => {
+      const children = allUsers.filter(u => u.referrer_id === parentId);
+      let ids = children.map(c => c.id);
+      for (const child of children) {
+        ids = [...ids, ...getDownlineIds(child.id)];
+      }
+      return ids;
+    };
+
+    const downlineIds = getDownlineIds(user.id);
+    if (downlineIds.length === 0) return [];
+
+    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', downlineIds).order('updated_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(c => this.mapCase(c));
   }
