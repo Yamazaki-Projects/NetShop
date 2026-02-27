@@ -142,7 +142,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
             {isSelf && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>あなた</Badge>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-             <AgencyStatusBadge user={user} />
+             <AgencyStatusBadge user={allUsers.find(u => u.loginId.toLowerCase() === user.loginId.toLowerCase())} />
              {associatedCase && (
                <>
                  <span style={{ color: 'var(--border)', fontSize: '0.7rem' }}>|</span>
