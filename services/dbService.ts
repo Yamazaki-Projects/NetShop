@@ -327,20 +327,26 @@ class DBService {
     const { data: allCasesData, error: cError } = await supabase.from('cases').select('id, referrer_id');
     if (cError || !allCasesData) return [];
 
-    const getDownlineIds = (parentId: string): string[] => {
+    const getDownlineIds = (parentId: string, isRoot: boolean = true): string[] => {
       const children = allCasesData.filter(c => 
         c.referrer_id && 
         parentId && 
         c.referrer_id.toLowerCase() === parentId.toLowerCase()
       );
-      let ids = children.map(c => c.id);
+      
+      let ids: string[] = [];
+      // ルート（自分自身）の直紹介は「チーム紹介」には含めない
+      if (!isRoot) {
+        ids = children.map(c => c.id);
+      }
+      
       for (const child of children) {
-        ids = [...ids, ...getDownlineIds(child.id)];
+        ids = [...ids, ...getDownlineIds(child.id, false)];
       }
       return ids;
     };
 
-    const downlineIds = getDownlineIds(user.id);
+    const downlineIds = getDownlineIds(user.id, true);
     if (downlineIds.length === 0) return [];
 
     const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });

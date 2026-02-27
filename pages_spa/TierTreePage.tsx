@@ -254,9 +254,23 @@ const TierTreePage = () => {
   const roots = useMemo(() => {
     if (!user) return [];
     if (user.role === UserRole.ADMIN) {
-      // 管理者の場合は、casesテーブルで紹介者がいない（または自分自身が紹介者の）案件をルートとする
-      const rootCases = allCases.filter(c => !c.referrerId || c.referrerId === '');
-      return rootCases.map(c => {
+      // 管理者の場合は、casesテーブルで紹介者がいない、または紹介者が管理者である案件をルートとする
+      const adminIds = allUsers.filter(u => u.role === UserRole.ADMIN).map(u => u.id.toLowerCase());
+      const rootCases = allCases.filter(c => 
+        !c.referrerId || 
+        c.referrerId === '' || 
+        adminIds.includes((c.referrerId || '').toLowerCase())
+      );
+      
+      // 重複を避けるため、紹介者がrootCasesの中に含まれているものは除外する（本当の最上位のみを抽出）
+      const caseIds = allCases.map(c => c.id.toLowerCase());
+      const trueRoots = rootCases.filter(c => {
+        const refId = (c.referrerId || '').toLowerCase();
+        // 紹介者が案件リストに存在しない（＝外部または最上位）か、紹介者が自分自身である場合
+        return !refId || !caseIds.includes(refId) || refId === c.id.toLowerCase();
+      });
+
+      return trueRoots.map(c => {
         const u = allUsers.find(usr => usr.id.toLowerCase() === c.id.toLowerCase());
         return u || ({ 
           id: c.id, 
