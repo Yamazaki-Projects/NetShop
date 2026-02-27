@@ -264,6 +264,7 @@ class DBService {
     const referrerUuid = me.id;
     const normalizedLoginId = caseData.id.toLowerCase();
 
+    // usersテーブルの更新
     const { data, error } = await supabase
       .from('users')
       .update({ 
@@ -274,6 +275,12 @@ class DBService {
       })
       .ilike('login_id', normalizedLoginId)
       .select();
+
+    // casesテーブルの紹介者情報も更新
+    await supabase
+      .from('cases')
+      .update({ referrer_id: referrerUuid })
+      .ilike('id', normalizedLoginId);
       
     return { ok: !error && data && data.length > 0, error };
   }
@@ -316,15 +323,15 @@ class DBService {
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
-    // 全ユーザーを取得してメモリ上でツリーを辿る（小規模アプリ向けの簡易実装）
-    const { data: allUsers, error: uError } = await supabase.from('users').select('id, referrer_id');
-    if (uError || !allUsers) return [];
+    // 全案件を取得してメモリ上でツリーを辿る
+    const { data: allCasesData, error: cError } = await supabase.from('cases').select('id, referrer_id');
+    if (cError || !allCasesData) return [];
 
     const getDownlineIds = (parentId: string): string[] => {
-      const children = allUsers.filter(u => 
-        u.referrer_id && 
+      const children = allCasesData.filter(c => 
+        c.referrer_id && 
         parentId && 
-        u.referrer_id.toLowerCase() === parentId.toLowerCase()
+        c.referrer_id.toLowerCase() === parentId.toLowerCase()
       );
       let ids = children.map(c => c.id);
       for (const child of children) {
@@ -336,7 +343,7 @@ class DBService {
     const downlineIds = getDownlineIds(user.id);
     if (downlineIds.length === 0) return [];
 
-    const { data, error } = await supabase.from('cases').select('*').in('referrer_id', downlineIds).order('updated_at', { ascending: false });
+    const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(c => this.mapCase(c));
   }

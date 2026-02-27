@@ -18,15 +18,31 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
   const [isExpanded, setIsExpanded] = useState(true);
   const navigate = useNavigate();
 
-  // 子要素は User テーブルの紹介関係のみを追う
+  // 子要素は cases テーブルの紹介関係を追う
   const children = useMemo(() => {
-    return allUsers.filter(u => 
-      u.referrerId && 
+    const childCases = allCases.filter(c => 
+      c.referrerId && 
       user.id && 
-      u.referrerId.toLowerCase() === user.id.toLowerCase() && 
-      u.id.toLowerCase() !== user.id.toLowerCase()
+      c.referrerId.toLowerCase() === user.id.toLowerCase() && 
+      c.id.toLowerCase() !== user.id.toLowerCase()
     );
-  }, [user.id, allUsers]);
+
+    return childCases.map(c => {
+      const u = allUsers.find(usr => usr.id.toLowerCase() === c.id.toLowerCase());
+      if (u) return u;
+      // ユーザーが見つからない場合は、案件情報から最小限のユーザーオブジェクトを作成
+      return {
+        id: c.id,
+        loginId: c.id,
+        name: c.companyName || c.repName || '不明',
+        role: UserRole.AGENCY,
+        status: UserStatus.CUSTOMER,
+        email: c.email,
+        agencyApplicationStatus: AgencyApplicationStatus.NONE,
+        createdAt: c.createdAt
+      } as User;
+    });
+  }, [user.id, allCases, allUsers]);
 
   const isSelf = currentUser.id === user.id;
 
@@ -238,13 +254,26 @@ const TierTreePage = () => {
   const roots = useMemo(() => {
     if (!user) return [];
     if (user.role === UserRole.ADMIN) {
-      // 管理者の場合は最上位（紹介者がいない、または管理者の直系）を表示
-      return allUsers.filter(u => !u.referrerId || u.role === UserRole.ADMIN);
+      // 管理者の場合は、casesテーブルで紹介者がいない（または自分自身が紹介者の）案件をルートとする
+      const rootCases = allCases.filter(c => !c.referrerId || c.referrerId === '');
+      return rootCases.map(c => {
+        const u = allUsers.find(usr => usr.id.toLowerCase() === c.id.toLowerCase());
+        return u || ({ 
+          id: c.id, 
+          loginId: c.id, 
+          name: c.companyName || c.repName || '不明', 
+          role: UserRole.AGENCY, 
+          status: UserStatus.CUSTOMER,
+          agencyApplicationStatus: AgencyApplicationStatus.NONE,
+          email: c.email,
+          createdAt: c.createdAt
+        } as User);
+      });
     }
     // 自分自身をルートとするが、allUsersから最新の自分を探す
     const me = allUsers.find(u => u.id.toLowerCase() === user.id.toLowerCase());
     return me ? [me] : [user];
-  }, [allUsers, user]);
+  }, [allUsers, allCases, user]);
 
   const handleAddCustomerClick = (userId: string) => {
     setSelectedReferrerId(userId);
