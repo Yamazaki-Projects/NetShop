@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CaseStatus } from '../types';
+import { CaseStatus, UserStatus, AgencyApplicationStatus, User } from '../types';
 import { STATUS_LABELS } from '../constants';
 
 // Added optional style prop to Badge component to fix TS errors in consumers
@@ -38,6 +38,22 @@ export const StatusBadge = ({ status }: { status: CaseStatus }) => {
       </Badge>
     </div>
   );
+};
+
+export const AgencyStatusBadge = ({ user, email, caseId, allUsers }: { user?: User | null, email?: string, caseId?: string, allUsers?: User[] }) => {
+  let u = user;
+  if (!u && allUsers && (caseId || email)) {
+    u = allUsers.find(x => 
+      (caseId && x.loginId.toLowerCase() === caseId.toLowerCase()) || 
+      (email && x.email === email)
+    ) || null;
+  }
+
+  if (!u) return <Badge color="#94a3b8">顧客</Badge>;
+  if (u.status === UserStatus.AGENCY) return <Badge color="#10b981">代理店</Badge>;
+  if (u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
+  if (u.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">申請中</Badge>;
+  return <Badge color="#94a3b8">未申請</Badge>;
 };
 
 // Added onClick prop to Card component to allow event manipulation (e.g., stopPropagation) in consumers

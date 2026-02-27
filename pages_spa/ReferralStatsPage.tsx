@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { Case } from '../types';
-import { Card, StatusBadge } from '../components/UI';
+import { Case, User } from '../types';
+import { Card, StatusBadge, AgencyStatusBadge } from '../components/UI';
 
 const ReferralStatsPage = () => {
   const { user } = useAppContext();
   const [myCases, setMyCases] = useState<Case[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,8 +16,12 @@ const ReferralStatsPage = () => {
       if (!user) return;
       setLoading(true);
       try {
-        const cases = await db.getCases(user);
+        const [cases, users] = await Promise.all([
+          db.getCases(user),
+          db.getUsers()
+        ]);
         setMyCases(cases);
+        setAllUsers(users);
       } catch (e) {
         console.error("Failed to load referral stats", e);
       } finally {
@@ -118,7 +123,7 @@ const ReferralStatsPage = () => {
                 <thead>
                   <tr>
                     <th className="align-left" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>顧客名</th>
-                    <th className="align-left" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>登録日</th>
+                    <th className="align-center" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>代理店状況</th>
                     <th className="align-center" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>ステータス</th>
                   </tr>
                 </thead>
@@ -129,8 +134,8 @@ const ReferralStatsPage = () => {
                         <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{c.customerName}</div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{c.id.toLowerCase()}</div>
                       </td>
-                      <td className="align-left" style={{ padding: '16px', fontWeight: 700, color: 'var(--text-sub)' }}>
-                        {new Date(c.createdAt).toLocaleDateString()}
+                      <td className="align-center" style={{ padding: '16px' }}>
+                        <AgencyStatusBadge caseId={c.id} email={c.email} allUsers={allUsers} />
                       </td>
                       <td className="align-center" style={{ padding: '16px' }}>
                         <StatusBadge status={c.status} />

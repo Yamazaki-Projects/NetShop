@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { User, UserStatus, UserRole, AgencyApplicationStatus, Case } from '../types';
-import { Badge, Button, Card, Input, Select } from '../components/UI';
+import { Badge, Button, Card, Input, Select, AgencyStatusBadge } from '../components/UI';
 
 const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAddCustomer }: { 
   user: User; 
@@ -51,23 +51,13 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
     return allCases.find(c => c.id.toLowerCase() === user.loginId.toLowerCase());
   }, [user.loginId, allCases]);
 
-  const getStatusInfo = () => {
-    if (user.role === UserRole.ADMIN) {
-      return { label: '管理者', color: 'var(--primary)', icon: 'fa-crown', bg: 'rgba(79, 70, 229, 0.1)' };
-    }
-    if (user.status === UserStatus.AGENCY) {
-      return { label: '代理店', color: 'var(--text-main)', icon: 'fa-user-tie', bg: 'rgba(30, 41, 59, 0.1)' };
-    }
-    if (user.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) {
-      return { label: '承認済', color: '#0ea5e9', icon: 'fa-user-check', bg: 'rgba(14, 165, 233, 0.1)' };
-    }
-    if (user.agencyApplicationStatus === AgencyApplicationStatus.PENDING) {
-      return { label: '申請中', color: '#f59e0b', icon: 'fa-clock', bg: 'rgba(245, 158, 11, 0.1)' };
-    }
-    return { label: '顧客', color: '#94a3b8', icon: 'fa-user', bg: 'var(--bg-card)' };
+  const getStatusIcon = () => {
+    if (user.role === UserRole.ADMIN) return 'fa-crown';
+    if (user.status === UserStatus.AGENCY) return 'fa-user-tie';
+    if (user.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return 'fa-user-check';
+    if (user.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return 'fa-clock';
+    return 'fa-user';
   };
-
-  const info = getStatusInfo();
 
   return (
     <div style={{ 
@@ -86,7 +76,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
         alignItems: 'center', 
         gap: '16px', 
         padding: '14px 18px', 
-        background: isSelf ? 'rgba(79, 70, 229, 0.1)' : info.bg, 
+        background: isSelf ? 'rgba(79, 70, 229, 0.1)' : 'var(--bg-card)', 
         borderRadius: '16px',
         border: isSelf ? '2.5px solid var(--primary)' : `1.5px solid var(--border)`,
         boxShadow: isSelf ? '0 10px 15px -3px rgba(79, 70, 229, 0.2)' : 'var(--shadow-sm)',
@@ -133,12 +123,12 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          color: isSelf ? 'white' : info.color,
+          color: isSelf ? 'white' : 'var(--text-sub)',
           fontSize: '1.1rem',
           boxShadow: isSelf ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none',
           border: isSelf ? 'none' : '1px solid var(--border)'
         }}>
-          <i className={`fa-solid ${associatedCase ? 'fa-briefcase' : info.icon}`}></i>
+          <i className={`fa-solid ${associatedCase ? 'fa-briefcase' : getStatusIcon()}`}></i>
         </div>
 
         <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -152,8 +142,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
             {isSelf && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>あなた</Badge>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-             <i className={`fa-solid ${info.icon}`} style={{ fontSize: '0.65rem', color: info.color }}></i>
-             <span style={{ fontSize: '0.7rem', fontWeight: 800, color: info.color }}>{info.label}</span>
+             <AgencyStatusBadge user={user} />
              {associatedCase && (
                <>
                  <span style={{ color: 'var(--border)', fontSize: '0.7rem' }}>|</span>
