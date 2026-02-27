@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { Case, User } from '../types';
-import { Card, StatusBadge, AgencyStatusBadge } from '../components/UI';
+import { Card, AgencyStatusBadge } from '../components/UI';
 
 const ReferralStatsPage = () => {
   const { user } = useAppContext();
@@ -124,7 +124,7 @@ const ReferralStatsPage = () => {
                   <tr>
                     <th className="align-left" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>顧客名</th>
                     <th className="align-center" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>代理店状況</th>
-                    <th className="align-center" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>ステータス</th>
+                    <th className="align-right" style={{ padding: '16px', color: 'var(--text-sub)', fontSize: '0.75rem', textTransform: 'uppercase' }}>登録日</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -137,8 +137,8 @@ const ReferralStatsPage = () => {
                       <td className="align-center" style={{ padding: '16px' }}>
                         <AgencyStatusBadge caseId={c.id} email={c.email} allUsers={allUsers} />
                       </td>
-                      <td className="align-center" style={{ padding: '16px' }}>
-                        <StatusBadge status={c.status} />
+                      <td className="align-right" style={{ padding: '16px', fontWeight: 700, color: 'var(--text-sub)' }}>
+                        {new Date(c.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
