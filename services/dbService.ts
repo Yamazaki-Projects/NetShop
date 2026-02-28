@@ -211,7 +211,6 @@ class DBService {
     }
 
     const newUser = {
-      id: nextId,
       login_id: nextId, 
       email: this.toInternalEmail(nextId),
       name: newCaseData.companyName || newCaseData.repName,
