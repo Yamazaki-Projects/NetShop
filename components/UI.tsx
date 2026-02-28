@@ -49,7 +49,7 @@ export const AgencyStatusBadge = ({ user, email, caseId, allUsers }: { user?: Us
     ) || null;
   }
 
-  if (!u) return <Badge color="#94a3b8">顧客</Badge>;
+  if (!u || u.agencyApplicationStatus === AgencyApplicationStatus.NONE) return <Badge color="#94a3b8">顧客</Badge>;
   if (u.status === UserStatus.AGENCY) return <Badge color="#10b981">代理店</Badge>;
   if (u.agencyApplicationStatus === AgencyApplicationStatus.APPROVED) return <Badge color="#0ea5e9">承認済</Badge>;
   if (u.agencyApplicationStatus === AgencyApplicationStatus.PENDING) return <Badge color="#f59e0b">申請中</Badge>;
