@@ -165,21 +165,32 @@ class DBService {
 
     const rate = await this.calculateRate(referrerUuid);
     
-    const { data: lastCases, error: fetchError } = await supabase
+    const { data: lastCases } = await supabase
       .from('cases')
       .select('id')
       .ilike('id', 'pa%')
       .order('id', { ascending: false })
       .limit(1);
 
+    const { data: lastUsers } = await supabase
+      .from('users')
+      .select('login_id')
+      .ilike('login_id', 'pa%')
+      .order('login_id', { ascending: false })
+      .limit(1);
+
     let nextIdNum = 1;
-    if (!fetchError && lastCases && lastCases.length > 0) {
-      const lastIdStr = lastCases[0].id;
-      const currentNum = parseInt(lastIdStr.replace(/pa/i, ''), 10);
-      if (!isNaN(currentNum)) {
-        nextIdNum = currentNum + 1;
-      }
+    let maxCaseNum = 0;
+    let maxUserNum = 0;
+
+    if (lastCases && lastCases.length > 0) {
+      maxCaseNum = parseInt(lastCases[0].id.replace(/pa/i, ''), 10);
     }
+    if (lastUsers && lastUsers.length > 0) {
+      maxUserNum = parseInt(lastUsers[0].login_id.replace(/pa/i, ''), 10);
+    }
+
+    nextIdNum = Math.max(maxCaseNum, maxUserNum) + 1;
     const nextId = `pa${String(nextIdNum).padStart(4, '0')}`;
 
     const dbPayload = {
