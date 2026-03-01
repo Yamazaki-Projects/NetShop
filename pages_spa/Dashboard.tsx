@@ -31,18 +31,20 @@ const Dashboard = () => {
     if (!user) return;
     const loadData = async () => {
       setLoading(true);
-      const [userCases, sysCases, sysUsers, count, rate] = await Promise.all([
+      const results = await Promise.allSettled([
         db.getCases(user),
         db.getAllCases(),
         db.getUsers(),
         db.getApprovedCount(user.id),
         db.calculateRate(user.id)
       ]);
-      setCases(userCases);
-      setAllCases(sysCases);
-      setUsers(sysUsers);
-      setApprovedCount(count);
-      setCurrentRate(rate);
+
+      if (results[0].status === 'fulfilled') setCases(results[0].value);
+      if (results[1].status === 'fulfilled') setAllCases(results[1].value);
+      if (results[2].status === 'fulfilled') setUsers(results[2].value);
+      if (results[3].status === 'fulfilled') setApprovedCount(results[3].value);
+      if (results[4].status === 'fulfilled') setCurrentRate(results[4].value);
+      
       setLoading(false);
     };
     loadData();

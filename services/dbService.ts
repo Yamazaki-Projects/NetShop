@@ -118,26 +118,50 @@ class DBService {
   }
 
   async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(u => this.mapUser(u));
+    try {
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.warn("Error fetching users (likely RLS):", error.message);
+        return [];
+      }
+      return (data || []).map(u => this.mapUser(u));
+    } catch (e) {
+      return [];
+    }
   }
 
   async getCases(user: User): Promise<Case[]> {
-    // UUID または login_id のいずれかが紹介者IDに設定されている案件を取得
+    if (!user) return [];
+    
+    const ids = [user.id];
+    if (user.loginId) ids.push(user.loginId);
+    
+    // referrer_id が UUID か loginId かに関わらず取得できるようにする
+    // Supabaseの .in は大文字小文字を区別するため、念のため loginId は小文字と大文字両方試すか ilike を検討
     const { data, error } = await supabase
       .from('cases')
       .select('*')
-      .or(`referrer_id.eq.${user.id},referrer_id.eq.${user.loginId}`)
+      .or(`referrer_id.in.(${ids.join(',')}),referrer_id.ilike.${user.loginId}`)
       .order('updated_at', { ascending: false });
-    if (error) throw error;
+      
+    if (error) {
+      console.error("Error in getCases:", error);
+      return [];
+    }
     return (data || []).map(c => this.mapCase(c));
   }
 
   async getAllCases(): Promise<Case[]> {
-    const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(c => this.mapCase(c));
+    try {
+      const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
+      if (error) {
+        console.warn("Error fetching all cases (likely RLS):", error.message);
+        return [];
+      }
+      return (data || []).map(c => this.mapCase(c));
+    } catch (e) {
+      return [];
+    }
   }
 
   async getCaseById(id: string): Promise<Case | null> {
@@ -351,16 +375,23 @@ class DBService {
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
-    // 全案件を取得してメモリ上でツリーを辿る
+    // 全案件と全ユーザーのID情報を取得してメモリ上でツリーを辿る
+    // RLSが有効な場合、ユーザーが閲覧権限を持つ範囲のみが対象となる
     const { data: allCasesData, error: cError } = await supabase.from('cases').select('id, referrer_id');
+    const { data: allUsersData, error: uError } = await supabase.from('users').select('id, login_id');
+    
     if (cError || !allCasesData) return [];
+    const users = allUsersData || [];
 
-    const getDownlineIds = (parentId: string, isRoot: boolean = true): string[] => {
-      const children = allCasesData.filter(c => 
-        c.referrer_id && 
-        parentId && 
-        c.referrer_id.toLowerCase() === parentId.toLowerCase()
-      );
+    const getDownlineIds = (parentUserId: string, parentLoginId: string, isRoot: boolean = true): string[] => {
+      if (!parentUserId && !parentLoginId) return [];
+      
+      const children = allCasesData.filter(c => {
+        if (!c.referrer_id) return false;
+        const refId = c.referrer_id.toLowerCase();
+        return (parentUserId && refId === parentUserId.toLowerCase()) || 
+               (parentLoginId && refId === parentLoginId.toLowerCase());
+      });
       
       let ids: string[] = [];
       // ルート（自分自身）の直紹介は「チーム紹介」には含めない
@@ -369,15 +400,20 @@ class DBService {
       }
       
       for (const child of children) {
-        ids = [...ids, ...getDownlineIds(child.id, false)];
+        // この案件がユーザー（代理店）として登録されているか確認
+        const linkedUser = users.find(u => u.login_id && u.login_id.toLowerCase() === child.id.toLowerCase());
+        if (linkedUser) {
+          // 登録されていれば、そのユーザーの紹介案件を再帰的に取得
+          ids = [...ids, ...getDownlineIds(linkedUser.id, linkedUser.login_id, false)];
+        }
       }
       return ids;
     };
 
-    const downlineIds = Array.from(new Set([
-      ...getDownlineIds(user.id, true),
-      ...getDownlineIds(user.loginId, true)
-    ]));
+    const downlineIds = Array.from(new Set(
+      getDownlineIds(user.id, user.loginId, true)
+    ));
+    
     if (downlineIds.length === 0) return [];
 
     const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });

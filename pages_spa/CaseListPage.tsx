@@ -32,10 +32,17 @@ const CaseListPage = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [m, t, u] = await Promise.all([db.getCases(user), db.getTeamCases(user), db.getUsers()]);
-      setMyCases(m);
-      setTeamCases(t);
-      setAllUsers(u);
+      // 個別のフェッチが失敗しても他のデータが表示されるように Promise.allSettled を使用
+      const results = await Promise.allSettled([
+        db.getCases(user), 
+        db.getTeamCases(user), 
+        db.getUsers()
+      ]);
+
+      if (results[0].status === 'fulfilled') setMyCases(results[0].value);
+      if (results[1].status === 'fulfilled') setTeamCases(results[1].value);
+      if (results[2].status === 'fulfilled') setAllUsers(results[2].value);
+      
     } catch (e) {
       console.error("Failed to load cases", e);
     } finally {

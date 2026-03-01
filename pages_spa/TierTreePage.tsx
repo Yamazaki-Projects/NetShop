@@ -223,12 +223,14 @@ const TierTreePage = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [u, c] = await Promise.all([
+      const results = await Promise.allSettled([
         db.getUsers(),
         db.getAllCases()
       ]);
-      setAllUsers(u);
-      setAllCases(c);
+      
+      if (results[0].status === 'fulfilled') setAllUsers(results[0].value);
+      if (results[1].status === 'fulfilled') setAllCases(results[1].value);
+      
     } catch (e) {
       console.error("Failed to load tree data", e);
     } finally {
