@@ -170,7 +170,7 @@ const CaseDetailPage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <Link to="/cases" style={{ color: 'var(--text-sub)', textDecoration: 'none', fontWeight: 800, fontSize: '0.85rem' }}><i className="fa-solid fa-arrow-left"></i> 顧客一覧に戻る</Link>
             <span style={{ color: 'var(--border)' }}>/</span>
-            <span style={{ color: 'var(--text-sub)', fontWeight: 800, fontSize: '0.85rem' }}>顧客ID: {caseData.id.toLowerCase()}</span>
+            <span style={{ color: 'var(--text-sub)', fontWeight: 800, fontSize: '0.85rem' }}>顧客ID: {(caseData.id || '').toLowerCase()}</span>
           </div>
           <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.03em' }}>
             {caseData.companyName || caseData.repName} <span style={{fontSize: '1.2rem', color: 'var(--text-sub)'}}>様</span>
@@ -228,7 +228,7 @@ const CaseDetailPage = () => {
                   <Badge color="#10b981" style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}>
                     <i className="fa-solid fa-check-circle"></i> 代理店登録済み
                   </Badge>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>ID: {caseData.id.toLowerCase()} で運用中</p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>ID: {(caseData.id || '').toLowerCase()} で運用中</p>
                 </div>
               ) : showCodeArea ? (
                 <div style={{ textAlign: 'left' }}>
@@ -239,7 +239,7 @@ const CaseDetailPage = () => {
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800, marginBottom: '8px' }}>顧客へ共有する情報:</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>顧客ID:</span>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--primary)' }}>{caseData.id.toLowerCase()}</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--primary)' }}>{(caseData.id || '').toLowerCase()}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>登録コード:</span>

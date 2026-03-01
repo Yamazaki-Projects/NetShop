@@ -73,27 +73,35 @@ const Dashboard = () => {
   }).length;
 
   const ranking = useMemo(() => {
-    if (users.length === 0 || allCases.length === 0) return [];
-    
-    const counts: Record<string, number> = {};
-    allCases.forEach(c => {
-      if (!c.referrerId) return;
-      const rId = c.referrerId.toLowerCase();
-      counts[rId] = (counts[rId] || 0) + 1;
-    });
+    try {
+      if (!users || users.length === 0 || !allCases || allCases.length === 0) return [];
+      
+      const counts: Record<string, number> = {};
+      allCases.forEach(c => {
+        if (!c || !c.referrerId) return;
+        const rId = String(c.referrerId).toLowerCase();
+        counts[rId] = (counts[rId] || 0) + 1;
+      });
 
-    return users
-      .map(u => ({
-        id: u.id,
-        name: u.name,
-        loginId: u.loginId,
-        count: counts[u.id.toLowerCase()] || counts[u.loginId?.toLowerCase() || ''] || 0,
-        role: u.role,
-        status: u.status
-      }))
-      .filter(u => u.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      return users
+        .map(u => {
+          if (!u) return null;
+          return {
+            id: u.id || '',
+            name: u.name || '不明',
+            loginId: u.loginId || '',
+            count: counts[(u.id || '').toLowerCase()] || counts[(u.loginId || '').toLowerCase()] || 0,
+            role: u.role,
+            status: u.status
+          };
+        })
+        .filter((u): u is any => u !== null && u.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    } catch (e) {
+      console.error("Ranking calculation error:", e);
+      return [];
+    }
   }, [users, allCases]);
 
   return (
@@ -101,7 +109,7 @@ const Dashboard = () => {
       <header style={{ marginBottom: '48px', textAlign: 'left' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>Welcome back, {user.name} <span style={{ color: 'var(--accent)' }}>👋</span></h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: '1.1rem', marginTop: '8px' }}>
-          ログインID: <Badge color="var(--primary)" style={{ fontSize: '0.85rem' }}>{user.loginId.toLowerCase()}</Badge> として認証されています。
+          ログインID: <Badge color="var(--primary)" style={{ fontSize: '0.85rem' }}>{(user.loginId || '').toLowerCase()}</Badge> として認証されています。
         </p>
       </header>
 
@@ -164,7 +172,7 @@ const Dashboard = () => {
                         <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>
                           {r.name} {r.id === user.id && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', marginLeft: '4px' }}>あなた</Badge>}
                         </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>{r.loginId.toLowerCase()}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>{(r.loginId || '').toLowerCase()}</div>
                       </td>
                       <td className="align-center" style={{ padding: '16px' }}>
                         <Badge color={r.status === UserStatus.AGENCY ? 'var(--primary)' : '#94a3b8'}>

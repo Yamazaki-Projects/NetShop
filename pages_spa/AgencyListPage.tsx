@@ -92,7 +92,7 @@ const AgencyListPage = () => {
                     <tr key={agency.id}>
                       <td className="align-left">
                         <div style={{ fontWeight: 800 }}>{agency.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{agency.loginId.toLowerCase()}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{(agency.loginId || '').toLowerCase()}</div>
                       </td>
                       <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>
                       <td className="align-center">

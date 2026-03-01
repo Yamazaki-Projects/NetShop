@@ -28,7 +28,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
     );
 
     return childCases.map(c => {
-      const u = allUsers.find(usr => usr.loginId.toLowerCase() === c.id.toLowerCase());
+      const u = allUsers.find(usr => (usr.loginId || '').toLowerCase() === (c.id || '').toLowerCase());
       if (u) return u;
       // ユーザーが見つからない場合は、案件情報から最小限のユーザーオブジェクトを作成
       return {
@@ -262,7 +262,7 @@ const TierTreePage = () => {
       });
 
       return trueRoots.map(c => {
-        const u = allUsers.find(usr => usr.loginId.toLowerCase() === c.id.toLowerCase());
+        const u = allUsers.find(usr => (usr.loginId || '').toLowerCase() === (c.id || '').toLowerCase());
         return u || ({ 
           id: c.id, 
           loginId: c.id, 
@@ -276,7 +276,7 @@ const TierTreePage = () => {
       });
     }
     // 自分自身をルートとするが、allUsersから最新の自分を探す
-    const me = allUsers.find(u => u.loginId.toLowerCase() === user.loginId.toLowerCase());
+    const me = allUsers.find(u => (u.loginId || '').toLowerCase() === (user.loginId || '').toLowerCase());
     return me ? [me] : [user];
   }, [allUsers, allCases, user]);
 
