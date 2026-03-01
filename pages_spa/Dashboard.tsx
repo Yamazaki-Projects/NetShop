@@ -68,7 +68,9 @@ const Dashboard = () => {
 
   const now = new Date();
   const currentMonthCount = cases.filter(c => {
+    if (!c || !c.createdAt) return false;
     const d = new Date(c.createdAt);
+    if (isNaN(d.getTime())) return false;
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 

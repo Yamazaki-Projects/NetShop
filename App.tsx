@@ -115,7 +115,28 @@ export default function App() {
     initApp();
   }, []);
 
-  if (initializing) return null;
+  if (initializing) return (
+    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
+      <i className="fa-solid fa-circle-notch fa-spin fa-3x" style={{ color: 'var(--primary)' }}></i>
+      <div style={{ fontWeight: 700, color: 'var(--text-sub)' }}>システムを初期化中...</div>
+    </div>
+  );
+
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+        <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '16px' }}>設定エラー</h1>
+        <p style={{ color: 'var(--text-sub)', maxWidth: '500px', lineHeight: 1.6 }}>
+          Supabase の環境変数 (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) が設定されていません。<br />
+          AI Studio の環境設定から設定を行ってください。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>

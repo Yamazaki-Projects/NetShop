@@ -132,7 +132,7 @@ const ReferralStatsPage = () => {
                     <tr key={c.id} style={{ borderTop: '1px solid var(--border)' }}>
                       <td className="align-left" style={{ padding: '16px' }}>
                         <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{c.customerName}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{c.id.toLowerCase()}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{(c.id || '').toLowerCase()}</div>
                       </td>
                       <td className="align-center" style={{ padding: '16px' }}>
                         <AgencyStatusBadge caseId={c.id} email={c.email} allUsers={allUsers} />

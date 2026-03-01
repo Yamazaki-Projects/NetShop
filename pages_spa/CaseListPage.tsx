@@ -117,7 +117,7 @@ const CaseListPage = () => {
                   <tr key={c.id} onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td className="align-left">
                       <div style={{ fontWeight: 800 }}>{c.customerName}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{c.id.toLowerCase()}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>{(c.id || '').toLowerCase()}</div>
                     </td>
                     <td className="align-center">
                       <Badge color={c.mallProgress.rakuten === MallOpeningStatus.OPENED ? '#10b981' : '#94a3b8'}>{c.mallProgress.rakuten}</Badge>
@@ -125,7 +125,9 @@ const CaseListPage = () => {
                     <td className="align-center">
                       <AgencyStatusBadge caseId={c.id} email={c.email} allUsers={allUsers} />
                     </td>
-                    <td className="align-right" style={{ color: 'var(--text-sub)', fontWeight: 700 }}>{new Date(c.updatedAt).toLocaleDateString()}</td>
+                    <td className="align-right" style={{ color: 'var(--text-sub)', fontWeight: 700 }}>
+                      {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : '---'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

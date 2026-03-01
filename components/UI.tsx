@@ -44,7 +44,7 @@ export const AgencyStatusBadge = ({ user, email, caseId, allUsers }: { user?: Us
   let u = user;
   if (!u && allUsers && (caseId || email)) {
     u = allUsers.find(x => 
-      (caseId && x.loginId.toLowerCase() === caseId.toLowerCase()) || 
+      (caseId && (x.loginId || '').toLowerCase() === (caseId || '').toLowerCase()) || 
       (email && x.email === email)
     ) || null;
   }

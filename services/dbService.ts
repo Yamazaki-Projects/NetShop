@@ -71,7 +71,7 @@ class DBService {
     
     // プロファイルが見つかれば、そこに登録されているメールも試行リストに追加
     if (profileByLoginId?.email) {
-      emailsToTry.add(profileByLoginId.email.toLowerCase());
+      emailsToTry.add((profileByLoginId.email || '').toLowerCase());
     }
 
     let lastAuthError: any = null;
@@ -124,7 +124,7 @@ class DBService {
         console.warn("Error fetching users (likely RLS):", error.message);
         return [];
       }
-      return (data || []).map(u => this.mapUser(u));
+      return (data || []).map((u: any) => this.mapUser(u));
     } catch (e) {
       return [];
     }
@@ -141,18 +141,18 @@ class DBService {
       return [];
     }
     
-    const uId = user.id.toLowerCase();
-    const lId = user.loginId?.toLowerCase();
+    const uId = (user.id || '').toLowerCase();
+    const lId = (user.loginId || '').toLowerCase();
     
-    const filtered = allData.filter(c => {
+    const filtered = allData.filter((c: any) => {
       if (!c.referrer_id) return false;
-      const rId = c.referrer_id.toLowerCase();
+      const rId = (c.referrer_id || '').toLowerCase();
       return rId === uId || (lId && rId === lId);
     });
     
     return filtered
-      .map(c => this.mapCase(c))
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      .map((c: any) => this.mapCase(c))
+      .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
   async getAllCases(): Promise<Case[]> {
@@ -162,7 +162,7 @@ class DBService {
         console.warn("Error fetching all cases (likely RLS):", error.message);
         return [];
       }
-      return (data || []).map(c => this.mapCase(c));
+      return (data || []).map((c: any) => this.mapCase(c));
     } catch (e) {
       return [];
     }
@@ -192,7 +192,7 @@ class DBService {
     // users テーブルの referrer_id は UUID 型のため、paXXXX の場合は UUID に変換を試みる
     let referrerUuidForUser: string | null = null;
     if (customReferrerId) {
-      if (customReferrerId.toLowerCase().startsWith('pa')) {
+      if ((customReferrerId || '').toLowerCase().startsWith('pa')) {
         const { data: refUser } = await supabase.from('users').select('id').ilike('login_id', customReferrerId).maybeSingle();
         referrerUuidForUser = refUser ? refUser.id : null;
       } else {
@@ -318,7 +318,7 @@ class DBService {
     if (!me) return { ok: false, error: { message: "現在のユーザープロフィールが見つかりません。" } };
     
     const referrerUuid = me.id;
-    const normalizedLoginId = caseData.id.toLowerCase();
+    const normalizedLoginId = (caseData.id || '').toLowerCase();
 
     // usersテーブルの更新
     const { data, error } = await supabase
@@ -390,22 +390,22 @@ class DBService {
     const getDownlineIds = (parentUserId: string, parentLoginId: string, isRoot: boolean = true): string[] => {
       if (!parentUserId && !parentLoginId) return [];
       
-      const children = allCasesData.filter(c => {
+      const children = allCasesData.filter((c: any) => {
         if (!c.referrer_id) return false;
-        const refId = c.referrer_id.toLowerCase();
-        return (parentUserId && refId === parentUserId.toLowerCase()) || 
-               (parentLoginId && refId === parentLoginId.toLowerCase());
+        const refId = (c.referrer_id || '').toLowerCase();
+        return (parentUserId && refId === (parentUserId || '').toLowerCase()) || 
+               (parentLoginId && refId === (parentLoginId || '').toLowerCase());
       });
       
       let ids: string[] = [];
       // ルート（自分自身）の直紹介は「チーム紹介」には含めない
       if (!isRoot) {
-        ids = children.map(c => c.id);
+        ids = children.map((c: any) => c.id);
       }
       
-      for (const child of children) {
+      for (const child of children as any[]) {
         // この案件がユーザー（代理店）として登録されているか確認
-        const linkedUser = users.find(u => u.login_id && u.login_id.toLowerCase() === child.id.toLowerCase());
+        const linkedUser = users.find((u: any) => u.login_id && (u.login_id || '').toLowerCase() === (child.id || '').toLowerCase());
         if (linkedUser) {
           // 登録されていれば、そのユーザーの紹介案件を再帰的に取得
           ids = [...ids, ...getDownlineIds(linkedUser.id, linkedUser.login_id, false)];
@@ -422,7 +422,7 @@ class DBService {
 
     const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(c => this.mapCase(c));
+    return (data || []).map((c: any) => this.mapCase(c));
   }
 
   async getUserByEmail(email: string): Promise<User | null> {

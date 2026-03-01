@@ -28,18 +28,18 @@ const getEnvVar = (key: string): string | undefined => {
 const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
-// 環境変数が設定されていない場合は、アプリの動作を停止させてエラーを表示します。
-// モックモードへのフォールバックは削除されました。
+// 環境変数が設定されていない場合は、エラーメッセージを表示しますが、
+// アプリ全体のクラッシュを防ぐためにエラーはスローしません。
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMsg = "Critical Configuration Error: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not defined. " +
                    "Please ensure these environment variables are set correctly in your Vercel project settings with the 'VITE_' prefix.";
   console.error(errorMsg);
-  // ブラウザ環境で実行を止めるためにエラーをスロー
-  throw new Error(errorMsg);
 }
 
 /**
  * Supabaseクライアントの初期化。
- * ここを通過するということは、必要な環境変数が揃っていることを保証します。
+ * 環境変数が不足している場合は null を返します。
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : (null as any);

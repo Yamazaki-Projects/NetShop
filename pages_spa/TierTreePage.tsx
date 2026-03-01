@@ -23,8 +23,8 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
     const childCases = allCases.filter(c => 
       c.referrerId && 
       user.id && 
-      c.referrerId.toLowerCase() === user.id.toLowerCase() && 
-      c.id.toLowerCase() !== user.id.toLowerCase()
+      (c.referrerId || '').toLowerCase() === (user.id || '').toLowerCase() && 
+      (c.id || '').toLowerCase() !== (user.id || '').toLowerCase()
     );
 
     return childCases.map(c => {
@@ -48,7 +48,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
 
   // 紐付く案件情報を取得（表示用）
   const associatedCase = useMemo(() => {
-    return allCases.find(c => c.id.toLowerCase() === user.loginId.toLowerCase());
+    return allCases.find(c => (c.id || '').toLowerCase() === (user.loginId || '').toLowerCase());
   }, [user.loginId, allCases]);
 
   const getStatusIcon = () => {
@@ -137,12 +137,12 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
               {associatedCase?.companyName || user.name}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)', background: 'var(--bg-main)', padding: '1px 6px', borderRadius: '4px', border: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
-              {user.loginId.toLowerCase()}
+              {(user.loginId || '').toLowerCase()}
             </span>
             {isSelf && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>あなた</Badge>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-             <AgencyStatusBadge user={allUsers.find(u => u.loginId.toLowerCase() === user.loginId.toLowerCase())} />
+             <AgencyStatusBadge user={allUsers.find(u => (u.loginId || '').toLowerCase() === (user.loginId || '').toLowerCase())} />
              {associatedCase && (
                <>
                  <span style={{ color: 'var(--border)', fontSize: '0.7rem' }}>|</span>
@@ -246,7 +246,7 @@ const TierTreePage = () => {
     if (!user) return [];
     if (user.role === UserRole.ADMIN) {
       // 管理者の場合は、casesテーブルで紹介者がいない、または紹介者が管理者である案件をルートとする
-      const adminIds = allUsers.filter(u => u.role === UserRole.ADMIN).map(u => u.id.toLowerCase());
+      const adminIds = allUsers.filter(u => u.role === UserRole.ADMIN).map(u => (u.id || '').toLowerCase());
       const rootCases = allCases.filter(c => 
         !c.referrerId || 
         c.referrerId === '' || 
@@ -254,11 +254,11 @@ const TierTreePage = () => {
       );
       
       // 重複を避けるため、紹介者がrootCasesの中に含まれているものは除外する（本当の最上位のみを抽出）
-      const caseIds = allCases.map(c => c.id.toLowerCase());
+      const caseIds = allCases.map(c => (c.id || '').toLowerCase());
       const trueRoots = rootCases.filter(c => {
         const refId = (c.referrerId || '').toLowerCase();
         // 紹介者が案件リストに存在しない（＝外部または最上位）か、紹介者が自分自身である場合
-        return !refId || !caseIds.includes(refId) || refId === c.id.toLowerCase();
+        return !refId || !caseIds.includes(refId) || refId === (c.id || '').toLowerCase();
       });
 
       return trueRoots.map(c => {

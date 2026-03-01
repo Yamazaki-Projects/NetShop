@@ -80,7 +80,7 @@ const AgencyApprovalPage = () => {
               <tbody>
                 {(activeTab === 'pending' ? pendingUsers : approvedUsers).map(user => (
                   <tr key={user.id}>
-                    <td className="align-left"><Badge color="var(--primary)">{user.loginId.toLowerCase()}</Badge></td>
+                    <td className="align-left"><Badge color="var(--primary)">{(user.loginId || '').toLowerCase()}</Badge></td>
                     <td className="align-left">
                       <div style={{ fontWeight: 800 }}>{user.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>{user.email}</div>
