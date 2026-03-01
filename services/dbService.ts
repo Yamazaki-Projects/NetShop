@@ -124,7 +124,12 @@ class DBService {
   }
 
   async getCases(user: User): Promise<Case[]> {
-    const { data, error } = await supabase.from('cases').select('*').eq('referrer_id', user.id).order('updated_at', { ascending: false });
+    // UUID または login_id のいずれかが紹介者IDに設定されている案件を取得
+    const { data, error } = await supabase
+      .from('cases')
+      .select('*')
+      .or(`referrer_id.eq.${user.id},referrer_id.eq.${user.loginId}`)
+      .order('updated_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(c => this.mapCase(c));
   }
@@ -154,16 +159,29 @@ class DBService {
     if (!me) throw new Error("プロフィールが見つかりません。");
     
     // 指定された紹介者IDがあればそれを使用、なければ自分
-    const referrerUuid = customReferrerId || me.id;
+    const referrerIdForCase = customReferrerId || me.id;
+    
+    // users テーブルの referrer_id は UUID 型のため、paXXXX の場合は UUID に変換を試みる
+    let referrerUuidForUser: string | null = null;
+    if (customReferrerId) {
+      if (customReferrerId.toLowerCase().startsWith('pa')) {
+        const { data: refUser } = await supabase.from('users').select('id').ilike('login_id', customReferrerId).maybeSingle();
+        referrerUuidForUser = refUser ? refUser.id : null;
+      } else {
+        referrerUuidForUser = customReferrerId;
+      }
+    } else {
+      referrerUuidForUser = me.id;
+    }
     
     // 紹介者の名前を取得
     let referrerName = actor.name;
     if (customReferrerId && customReferrerId !== me.id) {
-      const { data: refUser } = await supabase.from('users').select('name').eq('id', customReferrerId).maybeSingle();
+      const { data: refUser } = await supabase.from('users').select('name').or(`id.eq.${customReferrerId},login_id.eq.${customReferrerId}`).maybeSingle();
       if (refUser) referrerName = refUser.name;
     }
 
-    const rate = await this.calculateRate(referrerUuid);
+    const rate = await this.calculateRate(referrerIdForCase);
     
     const { data: lastCases } = await supabase
       .from('cases')
@@ -195,9 +213,9 @@ class DBService {
 
     const dbPayload = {
       id: nextId,
-      agency_id: referrerUuid,
+      agency_id: referrerIdForCase,
       agency_name: referrerName,
-      referrer_id: referrerUuid,
+      referrer_id: referrerIdForCase,
       status: CaseStatus.DRAFT,
       platform: PlatformType.RAKUTEN,
       base_amount: 198000,
@@ -227,7 +245,7 @@ class DBService {
       name: newCaseData.companyName || newCaseData.repName,
       role: UserRole.AGENCY,
       status: UserStatus.CUSTOMER,
-      referrer_id: referrerUuid, 
+      referrer_id: referrerUuidForUser, 
       agency_application_status: AgencyApplicationStatus.NONE,
       created_at: new Date().toISOString()
     };
@@ -356,7 +374,10 @@ class DBService {
       return ids;
     };
 
-    const downlineIds = getDownlineIds(user.id, true);
+    const downlineIds = Array.from(new Set([
+      ...getDownlineIds(user.id, true),
+      ...getDownlineIds(user.loginId, true)
+    ]));
     if (downlineIds.length === 0) return [];
 
     const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });
