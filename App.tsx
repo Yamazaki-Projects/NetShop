@@ -124,23 +124,16 @@ export default function App() {
 
   const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
   const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-        <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '16px' }}>設定エラー</h1>
-        <p style={{ color: 'var(--text-sub)', maxWidth: '500px', lineHeight: 1.6 }}>
-          Supabase の環境変数 (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) が設定されていません。<br />
-          AI Studio の環境設定から設定を行ってください。
-        </p>
-      </div>
-    );
-  }
+  const isDemoMode = !supabaseUrl || !supabaseKey;
 
   return (
     <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>
       <HashRouter>
+        {isDemoMode && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#f59e0b', color: 'white', textAlign: 'center', fontSize: '0.7rem', fontWeight: 900, zIndex: 9999, padding: '2px' }}>
+            ⚠️ デモモードで動作中（データベース未接続）
+          </div>
+        )}
         {/* Migrated Routes/Route for v6 compatibility */}
         <Routes>
           <Route path="/login" element={<LoginPage />} />

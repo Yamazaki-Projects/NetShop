@@ -3,8 +3,10 @@ import {
   User, Case, CaseStatus, UserRole, UserStatus, AgencyApplicationStatus, PlatformType, MallOpeningStatus
 } from '../types';
 import { supabase } from './supabaseClient.browser';
+import { mockUsers, mockCases } from './mockData';
 
 class DBService {
+  private isDemoMode: boolean = !supabase;
   private toInternalEmail(loginId: string): string {
     const trimmedId = loginId.trim().toLowerCase();
     if (trimmedId.includes('@')) return trimmedId;
@@ -33,6 +35,7 @@ class DBService {
   }
 
   async getCurrentUser(): Promise<User | null> {
+    if (this.isDemoMode) return mockUsers[0];
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session || !session.user) return null;
@@ -51,6 +54,15 @@ class DBService {
   async login(loginId: string, pass: string): Promise<User | null> {
     const normalizedLoginId = loginId.trim().toLowerCase();
     
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => 
+        (u.loginId || '').toLowerCase() === normalizedLoginId || 
+        u.email.toLowerCase() === normalizedLoginId
+      );
+      if (user && (user as any).password === pass) return user;
+      if (user && pass === 'demo') return user;
+      return null;
+    }
     // 1. ユーザープロファイルを先に取得して、登録されているメールアドレスを確認する
     const { data: profileByLoginId } = await supabase
       .from('users')
@@ -118,6 +130,7 @@ class DBService {
   }
 
   async getUsers(): Promise<User[]> {
+    if (this.isDemoMode) return mockUsers;
     try {
       const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
       if (error) {
@@ -132,7 +145,14 @@ class DBService {
 
   async getCases(user: User): Promise<Case[]> {
     if (!user) return [];
-    
+    if (this.isDemoMode) {
+      const uId = (user.id || '').toLowerCase();
+      const lId = (user.loginId || '').toLowerCase();
+      return mockCases.filter(c => {
+        const rId = (c.referrerId || '').toLowerCase();
+        return rId === uId || (lId && rId === lId);
+      });
+    }
     // 確実にマッチさせるため、一度取得してからメモリ上でフィルタリング
     // これにより、UUID/ログインIDの混在や大文字小文字の差異を確実に吸収できる
     const { data: allData, error } = await supabase.from('cases').select('*');
@@ -156,6 +176,7 @@ class DBService {
   }
 
   async getAllCases(): Promise<Case[]> {
+    if (this.isDemoMode) return mockCases;
     try {
       const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
       if (error) {
@@ -169,6 +190,7 @@ class DBService {
   }
 
   async getCaseById(id: string): Promise<Case | null> {
+    if (this.isDemoMode) return mockCases.find(c => (c.id || '').toLowerCase() === (id || '').toLowerCase()) || null;
     // ilike を使用して大文字小文字の差異を許容する
     const { data, error } = await supabase.from('cases').select('*').ilike('id', id).maybeSingle();
     if (error) throw error;
@@ -379,8 +401,32 @@ class DBService {
   }
 
   async getTeamCases(user: User): Promise<Case[]> {
+    if (!user) return [];
+    if (this.isDemoMode) {
+      const uId = (user.id || '').toLowerCase();
+      const lId = (user.loginId || '').toLowerCase();
+      
+      const getDownlineIds = (parentUserId: string, parentLoginId: string, isRoot: boolean = true): string[] => {
+        const children = mockCases.filter(c => {
+          const rId = (c.referrerId || '').toLowerCase();
+          return rId === (parentUserId || '').toLowerCase() || rId === (parentLoginId || '').toLowerCase();
+        });
+        
+        let ids: string[] = isRoot ? [] : children.map(c => c.id);
+        for (const child of children) {
+          const linkedUser = mockUsers.find(u => (u.loginId || '').toLowerCase() === (child.id || '').toLowerCase());
+          if (linkedUser) {
+            ids = [...ids, ...getDownlineIds(linkedUser.id, linkedUser.loginId, false)];
+          }
+        }
+        return ids;
+      };
+
+      const downlineIds = Array.from(new Set(getDownlineIds(uId, lId, true)));
+      return mockCases.filter(c => downlineIds.includes(c.id));
+    }
+
     // 全案件と全ユーザーのID情報を取得してメモリ上でツリーを辿る
-    // RLSが有効な場合、ユーザーが閲覧権限を持つ範囲のみが対象となる
     const { data: allCasesData, error: cError } = await supabase.from('cases').select('id, referrer_id');
     const { data: allUsersData, error: uError } = await supabase.from('users').select('id, login_id');
     
@@ -398,26 +444,18 @@ class DBService {
       });
       
       let ids: string[] = [];
-      // ルート（自分自身）の直紹介は「チーム紹介」には含めない
-      if (!isRoot) {
-        ids = children.map((c: any) => c.id);
-      }
+      if (!isRoot) ids = children.map((c: any) => c.id);
       
       for (const child of children as any[]) {
-        // この案件がユーザー（代理店）として登録されているか確認
         const linkedUser = users.find((u: any) => u.login_id && (u.login_id || '').toLowerCase() === (child.id || '').toLowerCase());
         if (linkedUser) {
-          // 登録されていれば、そのユーザーの紹介案件を再帰的に取得
           ids = [...ids, ...getDownlineIds(linkedUser.id, linkedUser.login_id, false)];
         }
       }
       return ids;
     };
 
-    const downlineIds = Array.from(new Set(
-      getDownlineIds(user.id, user.loginId, true)
-    ));
-    
+    const downlineIds = Array.from(new Set(getDownlineIds(user.id, user.loginId, true)));
     if (downlineIds.length === 0) return [];
 
     const { data, error } = await supabase.from('cases').select('*').in('id', downlineIds).order('updated_at', { ascending: false });
@@ -434,6 +472,7 @@ class DBService {
 
   async getUserByLoginId(loginId: string): Promise<User | null> {
     if (!loginId) return null;
+    if (this.isDemoMode) return mockUsers.find(u => (u.loginId || '').toLowerCase() === (loginId || '').trim().toLowerCase()) || null;
     const { data, error } = await supabase.from('users').select('*').ilike('login_id', loginId.trim()).maybeSingle();
     if (error) return null;
     return data ? this.mapUser(data) : null;
