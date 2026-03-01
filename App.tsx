@@ -85,7 +85,11 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         </nav>
 
         <div style={{ padding: '24px' }}>
-          <button onClick={() => { setUser(null); navigate('/login'); }} style={{ width: '100%', padding: '12px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 700, cursor: 'pointer' }}>ログアウト</button>
+          <button onClick={async () => { 
+            await db.logout();
+            setUser(null); 
+            navigate('/login'); 
+          }} style={{ width: '100%', padding: '12px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 700, cursor: 'pointer' }}>ログアウト</button>
         </div>
       </aside>
       

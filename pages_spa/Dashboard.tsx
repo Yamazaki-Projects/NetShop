@@ -30,22 +30,26 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
     const loadData = async () => {
-      setLoading(true);
-      const results = await Promise.allSettled([
-        db.getCases(user),
-        db.getAllCases(),
-        db.getUsers(),
-        db.getApprovedCount(user.id),
-        db.calculateRate(user.id)
-      ]);
+      try {
+        setLoading(true);
+        const results = await Promise.allSettled([
+          db.getCases(user),
+          db.getAllCases(),
+          db.getUsers(),
+          db.getApprovedCount(user.id),
+          db.calculateRate(user.id)
+        ]);
 
-      if (results[0].status === 'fulfilled') setCases(results[0].value);
-      if (results[1].status === 'fulfilled') setAllCases(results[1].value);
-      if (results[2].status === 'fulfilled') setUsers(results[2].value);
-      if (results[3].status === 'fulfilled') setApprovedCount(results[3].value);
-      if (results[4].status === 'fulfilled') setCurrentRate(results[4].value);
-      
-      setLoading(false);
+        if (results[0].status === 'fulfilled') setCases(results[0].value);
+        if (results[1].status === 'fulfilled') setAllCases(results[1].value);
+        if (results[2].status === 'fulfilled') setUsers(results[2].value);
+        if (results[3].status === 'fulfilled') setApprovedCount(results[3].value);
+        if (results[4].status === 'fulfilled') setCurrentRate(results[4].value);
+      } catch (e) {
+        console.error("Dashboard data load error:", e);
+      } finally {
+        setLoading(false);
+      }
     };
     loadData();
   }, [user]);
@@ -58,21 +62,39 @@ const Dashboard = () => {
 
   const isAdmin = user.role === UserRole.ADMIN;
 
-  const estimatedRevenue = cases
-    .filter(c => c.status === CaseStatus.APPROVED)
-    .reduce((sum, c) => sum + (c.isManualAdjustment ? (c.manualAgencyAmount || 0) : (c.baseAmount * c.appliedRate)), 0);
+  const estimatedRevenue = useMemo(() => {
+    try {
+      return (cases || [])
+        .filter(c => c && c.status === CaseStatus.APPROVED)
+        .reduce((sum, c) => sum + (c.isManualAdjustment ? (Number(c.manualAgencyAmount) || 0) : (Number(c.baseAmount || 0) * Number(c.appliedRate || 0))), 0);
+    } catch (e) {
+      return 0;
+    }
+  }, [cases]);
 
-  const totalSystemRevenue = allCases
-    .filter(c => c.status === CaseStatus.APPROVED)
-    .reduce((sum, c) => sum + c.baseAmount, 0);
+  const totalSystemRevenue = useMemo(() => {
+    try {
+      return (allCases || [])
+        .filter(c => c && c.status === CaseStatus.APPROVED)
+        .reduce((sum, c) => sum + (Number(c.baseAmount) || 0), 0);
+    } catch (e) {
+      return 0;
+    }
+  }, [allCases]);
 
-  const now = new Date();
-  const currentMonthCount = cases.filter(c => {
-    if (!c || !c.createdAt) return false;
-    const d = new Date(c.createdAt);
-    if (isNaN(d.getTime())) return false;
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+  const currentMonthCount = useMemo(() => {
+    try {
+      const now = new Date();
+      return (cases || []).filter(c => {
+        if (!c || !c.createdAt) return false;
+        const d = new Date(c.createdAt);
+        if (isNaN(d.getTime())) return false;
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).length;
+    } catch (e) {
+      return 0;
+    }
+  }, [cases]);
 
   const ranking = useMemo(() => {
     try {
@@ -118,15 +140,15 @@ const Dashboard = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px', marginBottom: '48px' }}>
         {isAdmin ? (
           <>
-            <StatCard title="全代理店数" value={`${users.filter(u => u.status === UserStatus.AGENCY).length} 名`} icon="fa-users" gradient="var(--grad-primary)" />
-            <StatCard title="総承認案件" value={`${allCases.filter(c => c.status === CaseStatus.APPROVED).length} 件`} icon="fa-check-double" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
-            <StatCard title="流通総額" value={`¥${totalSystemRevenue.toLocaleString()}`} icon="fa-chart-line" gradient="linear-gradient(135deg, #10b981, #34d399)" />
+            <StatCard title="全代理店数" value={`${(users || []).filter(u => u && u.status === UserStatus.AGENCY).length} 名`} icon="fa-users" gradient="var(--grad-primary)" />
+            <StatCard title="総承認案件" value={`${(allCases || []).filter(c => c && c.status === CaseStatus.APPROVED).length} 件`} icon="fa-check-double" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
+            <StatCard title="流通総額" value={`¥${(totalSystemRevenue || 0).toLocaleString()}`} icon="fa-chart-line" gradient="linear-gradient(135deg, #10b981, #34d399)" />
           </>
         ) : (
           <>
-            <StatCard title="累計直紹介数" value={`${cases.length} 件`} icon="fa-user-plus" gradient="var(--grad-primary)" />
-            <StatCard title="今月の直紹介数" value={`${currentMonthCount} 件`} icon="fa-calendar-check" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
-            <StatCard title="確定報酬額" value={`¥${estimatedRevenue.toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
+            <StatCard title="累計直紹介数" value={`${(cases || []).length} 件`} icon="fa-user-plus" gradient="var(--grad-primary)" />
+            <StatCard title="今月の直紹介数" value={`${(currentMonthCount || 0)} 件`} icon="fa-calendar-check" gradient="linear-gradient(135deg, #0ea5e9, #38bdf8)" />
+            <StatCard title="確定報酬額" value={`¥${(estimatedRevenue || 0).toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
           </>
         )}
       </div>

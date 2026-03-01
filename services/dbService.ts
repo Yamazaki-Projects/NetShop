@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient.browser';
 import { mockUsers, mockCases } from './mockData';
 
 class DBService {
-  private isDemoMode: boolean = !supabase;
+  private isDemoMode: boolean = !supabase || !(import.meta as any).env?.VITE_SUPABASE_URL;
   private toInternalEmail(loginId: string): string {
     const trimmedId = loginId.trim().toLowerCase();
     if (trimmedId.includes('@')) return trimmedId;
@@ -35,7 +35,17 @@ class DBService {
   }
 
   async getCurrentUser(): Promise<User | null> {
-    if (this.isDemoMode) return mockUsers[0];
+    if (this.isDemoMode) {
+      const savedUser = localStorage.getItem('netshop_demo_user');
+      if (savedUser) {
+        try {
+          return JSON.parse(savedUser);
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    }
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session || !session.user) return null;
@@ -55,12 +65,18 @@ class DBService {
     const normalizedLoginId = loginId.trim().toLowerCase();
     
     if (this.isDemoMode) {
+      console.log("Demo login attempt:", normalizedLoginId);
       const user = mockUsers.find(u => 
         (u.loginId || '').toLowerCase() === normalizedLoginId || 
-        u.email.toLowerCase() === normalizedLoginId
+        (u.email || '').toLowerCase() === normalizedLoginId
       );
-      if (user && (user as any).password === pass) return user;
-      if (user && pass === 'demo') return user;
+      
+      const isPassOk = user && ((user as any).password === pass || pass === 'demo');
+      
+      if (user && isPassOk) {
+        localStorage.setItem('netshop_demo_user', JSON.stringify(user));
+        return user;
+      }
       return null;
     }
     // 1. ユーザープロファイルを先に取得して、登録されているメールアドレスを確認する
@@ -198,6 +214,25 @@ class DBService {
   }
 
   async createCase(newCaseData: any, actor: User, customReferrerId?: string): Promise<Case | null> {
+    if (this.isDemoMode) {
+      const newCase: Case = {
+        ...newCaseData,
+        id: `CASE-${this.generateRandomCode(6)}`,
+        referrerId: customReferrerId || actor.id,
+        status: CaseStatus.SUBMITTED,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tasks: [],
+        documents: [],
+        reviews: [],
+        mallProgress: { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+        subline: { status: 'none' },
+        emailJp: { status: 'none' },
+        rakutenInfo: {}
+      };
+      mockCases.unshift(newCase);
+      return newCase;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error("セッションが見つかりません。");
     
@@ -312,6 +347,14 @@ class DBService {
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
+    if (this.isDemoMode) {
+      const idx = mockCases.findIndex(c => (c.id || '').toLowerCase() === (id || '').toLowerCase());
+      if (idx !== -1) {
+        mockCases[idx] = { ...mockCases[idx], ...updates, updatedAt: new Date().toISOString() };
+        return mockCases[idx];
+      }
+      return null;
+    }
     const dbUpdates: any = { updated_at: new Date().toISOString() };
     const mappings: Record<string, string> = {
       status: 'status', platform: 'platform', customerType: 'customer_type', companyName: 'company_name',
@@ -328,6 +371,13 @@ class DBService {
   }
 
   async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean, error?: any }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => (u.loginId || '').toLowerCase() === (caseData.id || '').toLowerCase());
+      if (user) {
+        user.agencyApplicationStatus = AgencyApplicationStatus.PENDING;
+      }
+      return { ok: true };
+    }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return { ok: false, error: { message: "セッションが見つかりません。" } };
 
@@ -364,6 +414,14 @@ class DBService {
   }
 
   async approveApplication(loginId: string): Promise<{ ok: boolean, message?: string }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
+      if (user) {
+        user.agencyApplicationStatus = AgencyApplicationStatus.APPROVED;
+        user.registrationCode = this.generateRandomCode();
+      }
+      return { ok: true };
+    }
     const code = this.generateRandomCode();
     const { error } = await supabase
       .from('users')
@@ -377,6 +435,12 @@ class DBService {
   }
 
   async reissueRegistrationCode(loginId: string): Promise<{ ok: boolean, code?: string }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
+      const newCode = this.generateRandomCode();
+      if (user) user.registrationCode = newCode;
+      return { ok: true, code: newCode };
+    }
     const newCode = this.generateRandomCode();
     const { error } = await supabase
       .from('users')
@@ -390,12 +454,19 @@ class DBService {
   }
 
   async calculateRate(userId: string): Promise<number> {
+    if (this.isDemoMode) {
+      const approvedCount = mockCases.filter(c => (c.referrerId || '').toLowerCase() === (userId || '').toLowerCase() && c.status === CaseStatus.APPROVED).length;
+      return approvedCount >= 11 ? 0.5 : (approvedCount >= 2 ? 0.4 : 0.3);
+    }
     const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
     const approvedCount = count || 0;
     return approvedCount >= 11 ? 0.5 : (approvedCount >= 2 ? 0.4 : 0.3);
   }
 
   async getApprovedCount(userId: string): Promise<number> {
+    if (this.isDemoMode) {
+      return mockCases.filter(c => (c.referrerId || '').toLowerCase() === (userId || '').toLowerCase() && c.status === CaseStatus.APPROVED).length;
+    }
     const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('referrer_id', userId).eq('status', CaseStatus.APPROVED);
     return count || 0;
   }
@@ -465,6 +536,7 @@ class DBService {
 
   async getUserByEmail(email: string): Promise<User | null> {
     if (!email) return null;
+    if (this.isDemoMode) return mockUsers.find(u => (u.email || '').toLowerCase() === email.trim().toLowerCase()) || null;
     const { data, error } = await supabase.from('users').select('*').eq('email', email.trim().toLowerCase()).maybeSingle();
     if (error) return null;
     return data ? this.mapUser(data) : null;
@@ -479,6 +551,11 @@ class DBService {
   }
 
   async checkRegistrationEligibility(loginId: string, registrationCode: string): Promise<{ ok: boolean, reason?: string, email?: string }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
+      if (!user) return { ok: false, reason: 'not_found' };
+      return { ok: true, email: user.email };
+    }
     const { data: user } = await supabase.from('users').select('*').ilike('login_id', loginId.trim()).maybeSingle();
     if (!user) return { ok: false, reason: 'not_found' };
     if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
@@ -495,6 +572,15 @@ class DBService {
     password: string
   ): Promise<{ ok: boolean }> {
     const normalizedId = loginId.trim().toLowerCase();
+    
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => (u.loginId || '').toLowerCase() === normalizedId);
+      if (user) {
+        user.status = UserStatus.AGENCY;
+        (user as any).password = password;
+      }
+      return { ok: true };
+    }
     
     // Edge Function の URL を構築
     const { data: { publicUrl } } = supabase.storage.from('dummy').getPublicUrl('');
@@ -538,6 +624,14 @@ class DBService {
   }
 
   async updateUserRewardConfig(userId: string, config: any, actor: User): Promise<{ ok: boolean }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => u.id === userId);
+      if (user) {
+        user.manualBaseAmountOverride = config.manualBaseAmountOverride;
+        user.manualRateOverride = config.manualRateOverride;
+      }
+      return { ok: true };
+    }
     const { error } = await supabase.from('users').update({ 
       manual_base_amount_override: config.manualBaseAmountOverride, 
       manual_rate_override: config.manualRateOverride 
@@ -545,31 +639,45 @@ class DBService {
     return { ok: !error };
   }
 
+  async logout(): Promise<void> {
+    if (this.isDemoMode) {
+      localStorage.removeItem('netshop_demo_user');
+      return;
+    }
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
+  }
+
   private mapUser(u: any): User {
+    if (!u) return {} as User;
     return {
-      id: u.id, auth_uid: u.auth_uid, loginId: u.login_id, email: u.email, name: u.name, role: u.role as UserRole,
-      status: u.status as UserStatus, referrerId: u.referrer_id,
-      agencyApplicationStatus: u.agency_application_status as AgencyApplicationStatus,
+      id: u.id || '', auth_uid: u.auth_uid || '', loginId: u.login_id || '', email: u.email || '', name: u.name || '', role: (u.role as UserRole) || UserRole.AGENCY,
+      status: (u.status as UserStatus) || UserStatus.CUSTOMER, referrerId: u.referrer_id || '',
+      agencyApplicationStatus: (u.agency_application_status as AgencyApplicationStatus) || AgencyApplicationStatus.NONE,
       manualRateOverride: u.manual_rate_override, manualBaseAmountOverride: u.manual_base_amount_override,
       registrationCode: u.registration_code,
       registrationCodeUsedAt: u.registration_code_used_at,
-      createdAt: u.created_at
+      createdAt: u.created_at || new Date().toISOString()
     };
   }
 
   private mapCase(c: any): Case {
+    if (!c) return {} as Case;
     return {
-      id: c.id, agencyId: c.agency_id, agencyName: c.agency_name, referrerId: c.referrer_id,
-      status: c.status as CaseStatus, platform: c.platform as PlatformType, customerType: c.customer_type,
-      companyName: c.company_name, companyNameKana: c.company_name_kana, representativeName: c.representative_name,
-      representativeNameKana: c.representative_name_kana, corporateNumber: c.corporate_number, establishedDate: c.established_date,
-      zipCode: c.zip_code, address: c.address, repName: c.rep_name, repNameKana: c.rep_name_kana,
-      repBirthDate: c.rep_birth_date, repZipCode: c.rep_zip_code, repAddress: c.rep_address, phone: c.phone, email: c.email,
-      customerName: c.rep_name || c.company_name, baseAmount: Number(c.base_amount || 0), appliedRate: Number(c.applied_rate || 0),
+      id: c.id || '', agencyId: c.agency_id || '', agencyName: c.agency_name || '', referrerId: c.referrer_id || '',
+      status: (c.status as CaseStatus) || CaseStatus.DRAFT, platform: (c.platform as PlatformType) || PlatformType.RAKUTEN, customerType: c.customer_type || 'corporation',
+      companyName: c.company_name || '', companyNameKana: c.company_name_kana || '', representativeName: c.representative_name || '',
+      representativeNameKana: c.representative_name_kana || '', corporateNumber: c.corporate_number, establishedDate: c.established_date,
+      zipCode: c.zip_code, address: c.address, repName: c.rep_name || '', repNameKana: c.rep_name_kana || '',
+      repBirthDate: c.rep_birth_date, repZipCode: c.rep_zip_code, repAddress: c.rep_address, phone: c.phone || '', email: c.email || '',
+      customerName: c.rep_name || c.company_name || '不明', baseAmount: Number(c.base_amount || 0), appliedRate: Number(c.applied_rate || 0),
       isManualAdjustment: !!c.is_manual_adjustment, manualAgencyAmount: Number(c.manual_agency_amount || 0), tasks: c.tasks || [],
       mallProgress: c.mall_progress || { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
       subline: c.subline || { status: 'none' }, emailJp: c.email_jp || { status: 'none' }, rakutenInfo: c.rakuten_info || {},
-      createdAt: c.created_at, updatedAt: c.updated_at, documents: [], reviews: []
+      createdAt: c.created_at || new Date().toISOString(), updatedAt: c.updated_at || new Date().toISOString(), documents: [], reviews: []
     };
   }
 }
