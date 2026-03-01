@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { CaseStatus, UserStatus, UserRole, Case, User } from '../types';
@@ -72,6 +72,30 @@ const Dashboard = () => {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 
+  const ranking = useMemo(() => {
+    if (users.length === 0 || allCases.length === 0) return [];
+    
+    const counts: Record<string, number> = {};
+    allCases.forEach(c => {
+      if (!c.referrerId) return;
+      const rId = c.referrerId.toLowerCase();
+      counts[rId] = (counts[rId] || 0) + 1;
+    });
+
+    return users
+      .map(u => ({
+        id: u.id,
+        name: u.name,
+        loginId: u.loginId,
+        count: counts[u.id.toLowerCase()] || counts[u.loginId?.toLowerCase() || ''] || 0,
+        role: u.role,
+        status: u.status
+      }))
+      .filter(u => u.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [users, allCases]);
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '48px', textAlign: 'left' }}>
@@ -95,6 +119,69 @@ const Dashboard = () => {
             <StatCard title="確定報酬額" value={`¥${estimatedRevenue.toLocaleString()}`} icon="fa-sack-dollar" gradient="linear-gradient(135deg, #10b981, #34d399)" />
           </>
         )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '28px' }}>
+        <Card title="直紹介ランキング (TOP 10)">
+          {ranking.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-sub)', fontWeight: 700 }}>
+              ランキングデータがありません。
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                    <th className="align-center" style={{ padding: '16px', width: '80px' }}>順位</th>
+                    <th className="align-left" style={{ padding: '16px' }}>氏名 / ID</th>
+                    <th className="align-center" style={{ padding: '16px' }}>区分</th>
+                    <th className="align-right" style={{ padding: '16px' }}>紹介件数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranking.map((r: any, idx: number) => (
+                    <tr key={r.id} style={{ 
+                      borderBottom: '1px solid var(--border)',
+                      backgroundColor: r.id === user.id ? 'rgba(79, 70, 229, 0.05)' : 'transparent'
+                    }}>
+                      <td className="align-center" style={{ padding: '16px' }}>
+                        <div style={{ 
+                          width: '32px', 
+                          height: '32px', 
+                          borderRadius: '50%', 
+                          background: idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : idx === 2 ? '#b45309' : 'var(--bg-main)',
+                          color: idx < 3 ? 'white' : 'var(--text-sub)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 900,
+                          margin: '0 auto'
+                        }}>
+                          {idx + 1}
+                        </div>
+                      </td>
+                      <td className="align-left" style={{ padding: '16px' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>
+                          {r.name} {r.id === user.id && <Badge color="var(--primary)" style={{ fontSize: '0.6rem', marginLeft: '4px' }}>あなた</Badge>}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>{r.loginId.toLowerCase()}</div>
+                      </td>
+                      <td className="align-center" style={{ padding: '16px' }}>
+                        <Badge color={r.status === UserStatus.AGENCY ? 'var(--primary)' : '#94a3b8'}>
+                          {r.status === UserStatus.AGENCY ? '代理店' : '顧客'}
+                        </Badge>
+                      </td>
+                      <td className="align-right" style={{ padding: '16px' }}>
+                        <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-main)' }}>{r.count}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginLeft: '4px', fontWeight: 700 }}>件</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
