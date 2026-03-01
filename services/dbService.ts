@@ -133,22 +133,26 @@ class DBService {
   async getCases(user: User): Promise<Case[]> {
     if (!user) return [];
     
-    const ids = [user.id];
-    if (user.loginId) ids.push(user.loginId);
-    
-    // referrer_id が UUID か loginId かに関わらず取得できるようにする
-    // Supabaseの .in は大文字小文字を区別するため、念のため loginId は小文字と大文字両方試すか ilike を検討
-    const { data, error } = await supabase
-      .from('cases')
-      .select('*')
-      .or(`referrer_id.in.(${ids.join(',')}),referrer_id.ilike.${user.loginId}`)
-      .order('updated_at', { ascending: false });
-      
-    if (error) {
-      console.error("Error in getCases:", error);
+    // 確実にマッチさせるため、一度取得してからメモリ上でフィルタリング
+    // これにより、UUID/ログインIDの混在や大文字小文字の差異を確実に吸収できる
+    const { data: allData, error } = await supabase.from('cases').select('*');
+    if (error || !allData) {
+      if (error) console.error("Error in getCases:", error);
       return [];
     }
-    return (data || []).map(c => this.mapCase(c));
+    
+    const uId = user.id.toLowerCase();
+    const lId = user.loginId?.toLowerCase();
+    
+    const filtered = allData.filter(c => {
+      if (!c.referrer_id) return false;
+      const rId = c.referrer_id.toLowerCase();
+      return rId === uId || (lId && rId === lId);
+    });
+    
+    return filtered
+      .map(c => this.mapCase(c))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
   async getAllCases(): Promise<Case[]> {
