@@ -34,7 +34,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
       return {
         id: c.id,
         loginId: c.id,
-        name: c.companyName || c.repName || '不明',
+        name: c.companyName || `${c.repLastName} ${c.repFirstName}` || '不明',
         role: UserRole.AGENCY,
         status: UserStatus.CUSTOMER,
         email: c.email,
@@ -214,7 +214,8 @@ const TierTreePage = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [newCaseForm, setNewCaseForm] = useState({
     companyName: '',
-    repName: '',
+    repLastName: '',
+    repFirstName: '',
     email: '',
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
     phone: ''
@@ -266,7 +267,7 @@ const TierTreePage = () => {
         return u || ({ 
           id: c.id, 
           loginId: c.id, 
-          name: c.companyName || c.repName || '不明', 
+          name: c.companyName || `${c.repLastName} ${c.repFirstName}` || '不明', 
           role: UserRole.AGENCY, 
           status: UserStatus.CUSTOMER,
           agencyApplicationStatus: AgencyApplicationStatus.NONE,
@@ -295,7 +296,8 @@ const TierTreePage = () => {
         setShowCreateModal(false);
         setNewCaseForm({
           companyName: '',
-          repName: '',
+          repLastName: '',
+          repFirstName: '',
           email: '',
           customerType: 'corporation',
           phone: ''
@@ -406,12 +408,22 @@ const TierTreePage = () => {
                 onChange={e => setNewCaseForm({...newCaseForm, companyName: e.target.value})} 
               />
               
-              <Input 
-                label="代表者氏名" 
-                required 
-                value={newCaseForm.repName} 
-                onChange={e => setNewCaseForm({...newCaseForm, repName: e.target.value})} 
-              />
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Input 
+                  label="代表者 姓" 
+                  required 
+                  value={newCaseForm.repLastName} 
+                  onChange={e => setNewCaseForm({...newCaseForm, repLastName: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <Input 
+                  label="代表者 名" 
+                  required 
+                  value={newCaseForm.repFirstName} 
+                  onChange={e => setNewCaseForm({...newCaseForm, repFirstName: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+              </div>
               
               <Input 
                 label="メールアドレス" 

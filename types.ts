@@ -42,10 +42,11 @@ export enum TaskStatus {
 }
 
 export enum MallOpeningStatus {
+  NOT_STARTED = '未着手',
   APPLYING = '申請中',
   OVERSEAS_PREP = '海外メーカー準備中',
   OPENED = 'オープン済',
-  SUSPENDED = '休止中',
+  REJECTED = '否決',
 }
 
 export interface User {
@@ -78,22 +79,34 @@ export interface Case {
   customerType: 'corporation' | 'sole_proprietor';
   companyName: string;
   companyNameKana: string;
-  representativeName: string;
-  representativeNameKana: string;
+  companyZipCode?: string;
+  companyAddress?: string;
+  companyAddressKana?: string;
   corporateNumber?: string;
   establishedDate?: string;
-  zipCode?: string;
-  address?: string;
-  repName: string;
-  repNameKana: string;
+  repLastName?: string;
+  repFirstName?: string;
+  repLastNameKana?: string;
+  repFirstNameKana?: string;
   repBirthDate?: string;
   repZipCode?: string;
   repAddress?: string;
+  repAddressKana?: string;
+  staffLastName?: string;
+  staffFirstName?: string;
+  staffLastNameKana?: string;
+  staffFirstNameKana?: string;
+  staffBirthDate?: string;
+  staffZipCode?: string;
+  staffAddress?: string;
+  staffAddressKana?: string;
   phone: string;
   customerName: string;
   email: string;
   notes?: string;
   baseAmount: number;
+  deposit: boolean;
+  depositAmount: number;
   appliedRate: number; 
   isManualAdjustment: boolean;
   manualAgencyAmount?: number;
@@ -106,6 +119,15 @@ export interface Case {
   emailJp: EmailJpInfo;
   rakutenInfo: RakutenInfo;
   mallProgress: MallProgress;
+  progressComments: ProgressComment[];
+  yahooFreeInput?: string;
+  aupayFreeInput?: string;
+}
+
+export interface ProgressComment {
+  id: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface CaseTask {
@@ -134,18 +156,23 @@ export interface CaseReview {
 
 export interface SublineInfo {
   number050?: string;
+  siteType: 'subline' | 'other';
   loginId?: string;
   password?: string;
+  otherUrl?: string;
   status: 'active' | 'pending' | 'none';
 }
 
 export interface EmailJpInfo {
   email?: string;
   password?: string;
+  domainType: 'email_jp' | 'other';
+  otherDomain?: string;
   status: 'active' | 'pending' | 'none';
 }
 
 export interface RakutenInfo {
+  needsShipping: 'necessary' | 'unnecessary';
   applyId?: string;
   applyPass?: string;
   rLoginId?: string;

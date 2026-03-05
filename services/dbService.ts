@@ -225,10 +225,14 @@ class DBService {
         tasks: [],
         documents: [],
         reviews: [],
-        mallProgress: { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
-        subline: { status: 'none' },
-        emailJp: { status: 'none' },
-        rakutenInfo: {}
+        mallProgress: { rakuten: MallOpeningStatus.NOT_STARTED, yahoo: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.NOT_STARTED },
+        subline: { status: 'none', siteType: 'subline' },
+        emailJp: { status: 'none', domainType: 'email_jp' },
+        rakutenInfo: { needsShipping: 'unnecessary' },
+        progressComments: [],
+        baseAmount: 198000,
+        deposit: false,
+        depositAmount: 30000
       };
       mockCases.unshift(newCase);
       return newCase;
@@ -399,7 +403,7 @@ class DBService {
         agency_application_status: AgencyApplicationStatus.PENDING,
         referrer_id: referrerUuid, 
         email: this.toInternalEmail(caseData.id), 
-        name: caseData.companyName || caseData.repName || '新規顧客'
+        name: caseData.companyName || `${caseData.repLastName} ${caseData.repFirstName}` || '新規顧客'
       })
       .ilike('login_id', normalizedLoginId)
       .select();
@@ -669,14 +673,24 @@ class DBService {
     return {
       id: c.id || '', agencyId: c.agency_id || '', agencyName: c.agency_name || '', referrerId: c.referrer_id || '',
       status: (c.status as CaseStatus) || CaseStatus.DRAFT, platform: (c.platform as PlatformType) || PlatformType.RAKUTEN, customerType: c.customer_type || 'corporation',
-      companyName: c.company_name || '', companyNameKana: c.company_name_kana || '', representativeName: c.representative_name || '',
-      representativeNameKana: c.representative_name_kana || '', corporateNumber: c.corporate_number, establishedDate: c.established_date,
-      zipCode: c.zip_code, address: c.address, repName: c.rep_name || '', repNameKana: c.rep_name_kana || '',
-      repBirthDate: c.rep_birth_date, repZipCode: c.rep_zip_code, repAddress: c.rep_address, phone: c.phone || '', email: c.email || '',
-      customerName: c.rep_name || c.company_name || '不明', baseAmount: Number(c.base_amount || 0), appliedRate: Number(c.applied_rate || 0),
+      companyName: c.company_name || '', companyNameKana: c.company_name_kana || '', 
+      companyZipCode: c.company_zip_code, companyAddress: c.company_address, companyAddressKana: c.company_address_kana,
+      corporateNumber: c.corporate_number, establishedDate: c.established_date,
+      repLastName: c.rep_last_name, repFirstName: c.rep_first_name, repLastNameKana: c.rep_last_name_kana, repFirstNameKana: c.rep_first_name_kana,
+      repBirthDate: c.rep_birth_date, repZipCode: c.rep_zip_code, repAddress: c.rep_address, repAddressKana: c.rep_address_kana,
+      staffLastName: c.staff_last_name, staffFirstName: c.staff_first_name, staffLastNameKana: c.staff_last_name_kana, staffFirstNameKana: c.staff_first_name_kana,
+      staffBirthDate: c.staff_birth_date, staffZipCode: c.staff_zip_code, staffAddress: c.staff_address, staffAddressKana: c.staff_address_kana,
+      phone: c.phone || '', email: c.email || '',
+      customerName: c.company_name || c.rep_last_name || '不明', 
+      baseAmount: Number(c.base_amount || 198000), deposit: !!c.deposit, depositAmount: Number(c.deposit_amount || 30000),
+      appliedRate: Number(c.applied_rate || 0),
       isManualAdjustment: !!c.is_manual_adjustment, manualAgencyAmount: Number(c.manual_agency_amount || 0), tasks: c.tasks || [],
-      mallProgress: c.mall_progress || { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
-      subline: c.subline || { status: 'none' }, emailJp: c.email_jp || { status: 'none' }, rakutenInfo: c.rakuten_info || {},
+      mallProgress: c.mall_progress || { rakuten: MallOpeningStatus.NOT_STARTED, yahoo: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.NOT_STARTED },
+      subline: c.subline || { status: 'none', siteType: 'subline' }, 
+      emailJp: c.email_jp || { status: 'none', domainType: 'email_jp' }, 
+      rakutenInfo: c.rakuten_info || { needsShipping: 'unnecessary' },
+      progressComments: c.progress_comments || [],
+      yahooFreeInput: c.yahoo_free_input, aupayFreeInput: c.aupay_free_input,
       createdAt: c.created_at || new Date().toISOString(), updatedAt: c.updated_at || new Date().toISOString(), documents: [], reviews: []
     };
   }

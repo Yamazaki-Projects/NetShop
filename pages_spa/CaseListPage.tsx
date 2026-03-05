@@ -22,7 +22,8 @@ const CaseListPage = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [newCaseForm, setNewCaseForm] = useState({
     companyName: '',
-    repName: '',
+    repLastName: '',
+    repFirstName: '',
     email: '',
     customerType: 'corporation' as 'corporation' | 'sole_proprietor',
     phone: ''
@@ -157,12 +158,22 @@ const CaseListPage = () => {
                 onChange={e => setNewCaseForm({...newCaseForm, companyName: e.target.value})} 
               />
               
-              <Input 
-                label="代表者氏名" 
-                required 
-                value={newCaseForm.repName} 
-                onChange={e => setNewCaseForm({...newCaseForm, repName: e.target.value})} 
-              />
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Input 
+                  label="代表者 姓" 
+                  required 
+                  value={newCaseForm.repLastName} 
+                  onChange={e => setNewCaseForm({...newCaseForm, repLastName: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <Input 
+                  label="代表者 名" 
+                  required 
+                  value={newCaseForm.repFirstName} 
+                  onChange={e => setNewCaseForm({...newCaseForm, repFirstName: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+              </div>
               
               <Input 
                 label="メールアドレス" 
