@@ -4,7 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
 import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment } from '../types';
-import { Card, Button, Badge, Input, Select } from '../components/UI';
+import { Card, Button, Badge, Input, Select, Textarea } from '../components/UI';
 
 type TabType = 'opening' | 'basic';
 
@@ -118,32 +118,66 @@ const CaseDetailPage = () => {
     }
   };
 
-  const InfoRow = ({ label, value, field, group, type = 'text', options }: { label: string; value?: any, field?: string, group?: string, type?: 'text' | 'date' | 'select' | 'textarea', options?: {label: string, value: string}[] }) => (
-    <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '14px 0', alignItems: 'center' }}>
-      <div style={{ width: '220px', color: 'var(--text-sub)', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ flex: 1, color: 'var(--text-main)', fontWeight: 700, fontSize: '0.9rem' }}>
+  const InfoRow = ({ 
+    label, 
+    value, 
+    field, 
+    group, 
+    type = 'text', 
+    options,
+    layout = 'horizontal',
+    labelWidth = '220px'
+  }: { 
+    label: string; 
+    value?: any; 
+    field?: string; 
+    group?: string; 
+    type?: 'text' | 'date' | 'select' | 'textarea'; 
+    options?: {label: string, value: string}[];
+    layout?: 'horizontal' | 'vertical';
+    labelWidth?: string;
+  }) => (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: layout === 'vertical' ? 'column' : 'row',
+      borderBottom: '1px solid var(--border)', 
+      padding: '14px 0', 
+      alignItems: layout === 'vertical' ? 'flex-start' : 'center',
+      gap: layout === 'vertical' ? '8px' : '0'
+    }}>
+      <div style={{ 
+        width: layout === 'vertical' ? '100%' : labelWidth, 
+        color: 'var(--text-sub)', 
+        fontWeight: 800, 
+        fontSize: '0.75rem', 
+        textTransform: 'uppercase',
+        marginBottom: layout === 'vertical' ? '4px' : '0'
+      }}>
+        {label}
+      </div>
+      <div style={{ flex: 1, width: '100%', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.9rem' }}>
         {isEditing && field ? (
           <>
             {type === 'select' ? (
               <Select 
                 value={group ? (editedCase[group]?.[field] || '') : (editedCase[field] || '')}
                 onChange={e => {
-                  if (group) setEditedCase({...editedCase, [group]: {...editedCase[group], [field]: e.target.value}});
+                  if (group) setEditedCase({...editedCase, [group]: {...(editedCase[group] || {}), [field]: e.target.value}});
                   else setEditedCase({...editedCase, [field]: e.target.value});
                 }}
-                style={{ marginBottom: 0 }}
+                containerStyle={{ marginBottom: 0 }}
               >
                 <option value="">選択してください</option>
                 {options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select>
             ) : type === 'textarea' ? (
-              <textarea 
+              <Textarea 
                 value={group ? (editedCase[group]?.[field] || '') : (editedCase[field] || '')}
                 onChange={e => {
-                  if (group) setEditedCase({...editedCase, [group]: {...editedCase[group], [field]: e.target.value}});
+                  if (group) setEditedCase({...editedCase, [group]: {...(editedCase[group] || {}), [field]: e.target.value}});
                   else setEditedCase({...editedCase, [field]: e.target.value});
                 }}
-                style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '2px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-main)', font: 'inherit' }}
+                containerStyle={{ marginBottom: 0 }}
                 rows={3}
               />
             ) : (
@@ -151,10 +185,10 @@ const CaseDetailPage = () => {
                 type={type}
                 value={group ? (editedCase[group]?.[field] || '') : (editedCase[field] || '')} 
                 onChange={e => {
-                  if (group) setEditedCase({...editedCase, [group]: {...editedCase[group], [field]: e.target.value}});
+                  if (group) setEditedCase({...editedCase, [group]: {...(editedCase[group] || {}), [field]: e.target.value}});
                   else setEditedCase({...editedCase, [field]: e.target.value});
                 }} 
-                style={{ marginBottom: 0 }} 
+                containerStyle={{ marginBottom: 0 }} 
               />
             )}
           </>
@@ -268,14 +302,14 @@ const CaseDetailPage = () => {
 
               <Card title="進捗コメント">
                 <div style={{ padding: '28px' }}>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
                     <Input 
                       placeholder="進捗コメントを入力..." 
                       value={newComment} 
                       onChange={e => setNewComment(e.target.value)} 
-                      style={{ marginBottom: 0, flex: 1 }}
+                      containerStyle={{ marginBottom: 0, flex: 1 }}
                     />
-                    <Button onClick={handleAddComment} disabled={!newComment.trim()}>追加</Button>
+                    <Button onClick={handleAddComment} disabled={!newComment.trim()} style={{ height: '50px' }}>追加</Button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {caseData.progressComments?.length === 0 ? (
@@ -316,14 +350,14 @@ const CaseDetailPage = () => {
               { (isEditing ? editedCase.customerType : caseData.customerType) === 'corporation' && (
                 <Card title="代表取締役情報">
                   <div style={{ padding: '0 28px 28px' }}>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <div style={{ flex: 1 }}><InfoRow label="姓" value={caseData.repLastName} field="repLastName" /></div>
-                      <div style={{ flex: 1 }}><InfoRow label="名" value={caseData.repFirstName} field="repFirstName" /></div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <div style={{ flex: 1 }}><InfoRow label="姓 ふりがな" value={caseData.repLastNameKana} field="repLastNameKana" /></div>
-                      <div style={{ flex: 1 }}><InfoRow label="名 ふりがな" value={caseData.repFirstNameKana} field="repFirstNameKana" /></div>
-                    </div>
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    <div style={{ flex: 1 }}><InfoRow label="姓" value={caseData.repLastName} field="repLastName" layout="vertical" /></div>
+                    <div style={{ flex: 1 }}><InfoRow label="名" value={caseData.repFirstName} field="repFirstName" layout="vertical" /></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    <div style={{ flex: 1 }}><InfoRow label="姓 ふりがな" value={caseData.repLastNameKana} field="repLastNameKana" layout="vertical" /></div>
+                    <div style={{ flex: 1 }}><InfoRow label="名 ふりがな" value={caseData.repFirstNameKana} field="repFirstNameKana" layout="vertical" /></div>
+                  </div>
                     <InfoRow label="生年月日" value={caseData.repBirthDate} field="repBirthDate" type="date" />
                     <InfoRow label="郵便番号" value={caseData.repZipCode} field="repZipCode" />
                     <InfoRow label="住所" value={caseData.repAddress} field="repAddress" />
@@ -334,13 +368,13 @@ const CaseDetailPage = () => {
 
               <Card title="担当者情報">
                 <div style={{ padding: '0 28px 28px' }}>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ flex: 1 }}><InfoRow label="姓" value={caseData.staffLastName} field="staffLastName" /></div>
-                    <div style={{ flex: 1 }}><InfoRow label="名" value={caseData.staffFirstName} field="staffFirstName" /></div>
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    <div style={{ flex: 1 }}><InfoRow label="姓" value={caseData.staffLastName} field="staffLastName" layout="vertical" /></div>
+                    <div style={{ flex: 1 }}><InfoRow label="名" value={caseData.staffFirstName} field="staffFirstName" layout="vertical" /></div>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ flex: 1 }}><InfoRow label="姓 ふりがな" value={caseData.staffLastNameKana} field="staffLastNameKana" /></div>
-                    <div style={{ flex: 1 }}><InfoRow label="名 ふりがな" value={caseData.staffFirstNameKana} field="staffFirstNameKana" /></div>
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    <div style={{ flex: 1 }}><InfoRow label="姓 ふりがな" value={caseData.staffLastNameKana} field="staffLastNameKana" layout="vertical" /></div>
+                    <div style={{ flex: 1 }}><InfoRow label="名 ふりがな" value={caseData.staffFirstNameKana} field="staffFirstNameKana" layout="vertical" /></div>
                   </div>
                   <InfoRow label="生年月日" value={caseData.staffBirthDate} field="staffBirthDate" type="date" />
                   <InfoRow label="郵便番号" value={caseData.staffZipCode} field="staffZipCode" />
