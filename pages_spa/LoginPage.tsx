@@ -28,7 +28,7 @@ const LoginPage = () => {
         setError('ログインに失敗しました。ログインIDまたはパスワードが正しくありません。');
       }
     } catch (err: any) {
-      setError('サーバーとの通信に失敗しました。');
+      setError(err.message || 'サーバーとの通信に失敗しました。');
     } finally {
       setLoading(false);
     }

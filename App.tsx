@@ -28,7 +28,6 @@ interface AppContextType {
   setUser: (user: User | null) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
-  authChecked: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,7 +38,7 @@ export const useAppContext = () => {
   return context;
 };
 
-// ✅ ログイン後にしか見ないページを遅延読み込み
+// ログイン後のページだけ遅延読み込み
 const Dashboard = lazy(() => import('./pages_spa/Dashboard'));
 const CaseListPage = lazy(() => import('./pages_spa/CaseListPage'));
 const CaseDetailPage = lazy(() => import('./pages_spa/CaseDetailPage'));
@@ -106,24 +105,18 @@ const SidebarLink = ({
 );
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, authChecked } = useAppContext();
+  const { user } = useAppContext();
 
-  // ✅ 認証確認中でも、ログイン画面自体はブロックしない
-  // protected routeに来た場合だけ最小ローディング
-  if (!authChecked) return <PageLoader />;
-
+  // ✅ 認証確認を待たず、未ログインなら即ログイン画面へ
   if (!user) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 };
 
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, authChecked } = useAppContext();
+  const { user } = useAppContext();
 
-  // ✅ 認証確認前でもログイン画面は即表示
-  // ただし、認証済みが確定したら内部ページへ飛ばす
-  if (!authChecked) return <>{children}</>;
-
+  // ✅ user がいなければ即ログイン画面を出す
   if (user) return <Navigate to="/" replace />;
 
   return <>{children}</>;
@@ -231,11 +224,9 @@ const Layout = () => {
       </aside>
 
       <main style={{ flex: 1, padding: '48px', overflowY: 'auto' }}>
-        <div className="animate-fade-in">
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
-        </div>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );
@@ -260,33 +251,27 @@ export default function App() {
     return null;
   });
 
-  // ✅ 全画面ブロック用ではなく「認証確認済みか」だけ持つ
-  const [authChecked, setAuthChecked] = useState<boolean>(isDemoMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(
     () => (localStorage.getItem('theme-mode') as ThemeMode) || 'system'
   );
 
   useEffect(() => {
-    if (isDemoMode) {
-      setAuthChecked(true);
-      return;
-    }
+    if (isDemoMode) return;
 
     let mounted = true;
 
-    const initAuth = async () => {
+    // ✅ 裏でセッション復元するが、画面表示はブロックしない
+    const restoreSession = async () => {
       try {
         const restored = await db.getCurrentUser();
         if (!mounted) return;
         if (restored) setUser(restored);
       } catch (e) {
         console.error('Failed to restore session', e);
-      } finally {
-        if (mounted) setAuthChecked(true);
       }
     };
 
-    initAuth();
+    restoreSession();
 
     return () => {
       mounted = false;
@@ -298,7 +283,7 @@ export default function App() {
   }, [themeMode]);
 
   return (
-    <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode, authChecked }}>
+    <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>
       <HashRouter>
         {isDemoMode && (
           <div

@@ -75,7 +75,9 @@ const CaseListPage = () => {
         navigate(`/cases/${created.id}`);
       }
     } catch (e: any) {
-      alert("登録に失敗しました: " + e.message);
+      // alert ではなく、より詳細なエラーメッセージを表示するように修正
+      console.error("Case creation failed:", e);
+      alert(e.message || "登録に失敗しました。");
     } finally {
       setCreateLoading(false);
     }

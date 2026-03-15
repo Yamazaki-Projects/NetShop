@@ -43,8 +43,8 @@ const RegistrationPage = () => {
         else if (result.reason === 'code_used') setError('この登録コードは既に使用されています。');
         else setError('エラーが発生しました。');
       }
-    } catch (err) {
-      setError('サーバー通信に失敗しました。');
+    } catch (err: any) {
+      setError(err.message || 'サーバー通信に失敗しました。');
     }
     setLoading(false);
   };
