@@ -1,21 +1,23 @@
 
-import React, { useState, useEffect, createContext, useContext, lazy, Suspense } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 // Migrated to react-router-dom v6 (Routes instead of Switch, Navigate instead of Redirect, useNavigate instead of useHistory)
 import { HashRouter, Routes, Route, Navigate, Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { db } from './services/dbService';
 import { Button } from './components/UI';
+import Dashboard from './pages_spa/Dashboard';
+import CaseListPage from './pages_spa/CaseListPage';
+import CaseDetailPage from './pages_spa/CaseDetailPage';
+import LoginPage from './pages_spa/LoginPage';
+import TierTreePage from './pages_spa/TierTreePage';
+import RegistrationPage from './pages_spa/RegistrationPage';
+import AgencyListPage from './pages_spa/AgencyListPage';
+import AgencyApprovalPage from './pages_spa/AgencyApprovalPage';
+import ReferralStatsPage from './pages_spa/ReferralStatsPage';
 
-// Lazy load pages for better performance
-const Dashboard = lazy(() => import('./pages_spa/Dashboard'));
-const CaseListPage = lazy(() => import('./pages_spa/CaseListPage'));
-const CaseDetailPage = lazy(() => import('./pages_spa/CaseDetailPage'));
-const LoginPage = lazy(() => import('./pages_spa/LoginPage'));
-const TierTreePage = lazy(() => import('./pages_spa/TierTreePage'));
-const RegistrationPage = lazy(() => import('./pages_spa/RegistrationPage'));
-const AgencyListPage = lazy(() => import('./pages_spa/AgencyListPage'));
-const AgencyApprovalPage = lazy(() => import('./pages_spa/AgencyApprovalPage'));
-const ReferralStatsPage = lazy(() => import('./pages_spa/ReferralStatsPage'));
+// Lazy load only the internal pages if needed, but for now let's keep them direct if they are small, 
+// or lazy load only the ones that are truly heavy. 
+// Given the user complaint, let's prioritize speed for the entry pages.
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -104,11 +106,29 @@ const Layout = () => {
 };
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [initializing, setInitializing] = useState(true);
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+  const isDemoMode = !supabaseUrl || !supabaseKey;
+
+  const [user, setUser] = useState<User | null>(() => {
+    if (isDemoMode) {
+      const saved = localStorage.getItem('netshop_demo_user');
+      if (saved) {
+        try { return JSON.parse(saved); } catch(e) {}
+      }
+    }
+    return null;
+  });
+
+  const [initializing, setInitializing] = useState(() => !isDemoMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('theme-mode') as ThemeMode) || 'system');
 
   useEffect(() => {
+    if (isDemoMode) {
+      setInitializing(false);
+      return;
+    }
+
     const initApp = async () => {
       try {
         const u = await db.getCurrentUser();
@@ -120,7 +140,7 @@ export default function App() {
       }
     };
     initApp();
-  }, []);
+  }, [isDemoMode]);
 
   if (initializing) return (
     <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
@@ -128,10 +148,6 @@ export default function App() {
       <div style={{ fontWeight: 700, color: 'var(--text-sub)' }}>システムを初期化中...</div>
     </div>
   );
-
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-  const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-  const isDemoMode = !supabaseUrl || !supabaseKey;
 
   return (
     <AppContext.Provider value={{ user, setUser, themeMode, setThemeMode }}>
@@ -141,27 +157,21 @@ export default function App() {
             ⚠️ デモモードで動作中（データベース未接続）
           </div>
         )}
-        <Suspense fallback={
-          <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
-            <i className="fa-solid fa-circle-notch fa-spin fa-2x" style={{ color: 'var(--primary)' }}></i>
-          </div>
-        }>
-          {/* Migrated Routes/Route for v6 compatibility */}
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegistrationPage />} />
-            <Route element={<Layout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/cases" element={<CaseListPage />} />
-              <Route path="/cases/:id" element={<CaseDetailPage />} />
-              <Route path="/approvals" element={<AgencyApprovalPage />} />
-              <Route path="/tree" element={<TierTreePage />} />
-              <Route path="/stats" element={<ReferralStatsPage />} />
-              <Route path="/agencies" element={<AgencyListPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </Suspense>
+        {/* Migrated Routes/Route for v6 compatibility */}
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegistrationPage />} />
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/cases" element={<CaseListPage />} />
+            <Route path="/cases/:id" element={<CaseDetailPage />} />
+            <Route path="/approvals" element={<AgencyApprovalPage />} />
+            <Route path="/tree" element={<TierTreePage />} />
+            <Route path="/stats" element={<ReferralStatsPage />} />
+            <Route path="/agencies" element={<AgencyListPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
       </HashRouter>
     </AppContext.Provider>
   );
