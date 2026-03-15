@@ -7,6 +7,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'supabase-vendor': ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,
