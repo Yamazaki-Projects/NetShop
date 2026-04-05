@@ -104,7 +104,14 @@ class DBService {
     }
 
     try {
-      const email = this.toInternalEmail(normalizedLoginId);
+      // usersテーブルからloginIdに対応するメールアドレスを取得（EC0001などの新ID対応）
+      let email = this.toInternalEmail(normalizedLoginId);
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('email')
+        .ilike('login_id', normalizedLoginId)
+        .maybeSingle();
+      if (userRecord?.email) email = userRecord.email;
 
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
