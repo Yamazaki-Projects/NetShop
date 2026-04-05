@@ -156,6 +156,50 @@ class DBService {
     }
   }
 
+  async updateProfile(userId: string, data: { name?: string; email?: string }): Promise<{ ok: boolean; message?: string }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => u.id === userId);
+      if (user) {
+        if (data.name) user.name = data.name;
+        if (data.email) user.email = data.email;
+        const saved = JSON.parse(localStorage.getItem('netshop_demo_user') || '{}');
+        if (saved.id === userId) {
+          localStorage.setItem('netshop_demo_user', JSON.stringify({ ...saved, ...data }));
+        }
+      }
+      return { ok: true };
+    }
+    try {
+      const updates: any = {};
+      if (data.name) updates.name = data.name;
+      if (data.email) updates.email = data.email;
+
+      const { error } = await supabase.from('users').update(updates).eq('id', userId);
+      if (error) return { ok: false, message: error.message };
+
+      if (data.email) {
+        const { error: authError } = await supabase.auth.updateUser({ email: data.email });
+        if (authError) return { ok: false, message: authError.message };
+      }
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, message: e.message };
+    }
+  }
+
+  async updatePassword(newPassword: string): Promise<{ ok: boolean; message?: string }> {
+    if (this.isDemoMode) return { ok: true };
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { ok: false, message: error.message };
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, message: e.message };
+    }
+  }
+
   async logout(): Promise<void> {
     if (this.isDemoMode) {
       localStorage.removeItem('netshop_demo_user');

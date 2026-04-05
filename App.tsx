@@ -30,6 +30,7 @@ const TierTreePage = lazy(() => import("./pages_spa/TierTreePage"));
 const ReferralStatsPage = lazy(() => import("./pages_spa/ReferralStatsPage"));
 const AgencyListPage = lazy(() => import("./pages_spa/AgencyListPage"));
 const AgencyApprovalPage = lazy(() => import("./pages_spa/AgencyApprovalPage"));
+const ProfilePage = lazy(() => import("./pages_spa/ProfilePage"));
 
 interface AppContextType {
   user: User | null;
@@ -91,6 +92,7 @@ const Sidebar = () => {
       { to: "/agencies", icon: "fa-building", label: "代理店一覧" },
       { to: "/approvals", icon: "fa-user-check", label: "代理店承認" },
     ] : []),
+    { to: "/profile", icon: "fa-circle-user", label: "プロフィール" },
   ];
 
   return (
@@ -208,6 +210,7 @@ export default function App() {
             <Route path="/stats" element={<ReferralStatsPage />} />
             <Route path="/agencies" element={<AgencyListPage />} />
             <Route path="/approvals" element={<AgencyApprovalPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />
