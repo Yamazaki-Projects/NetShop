@@ -12,13 +12,15 @@ import {
   Routes,
   Route,
   Navigate,
-  Outlet
+  Outlet,
+  NavLink,
+  useNavigate
 } from "react-router-dom";
 
 import LoginPage from "./pages_spa/LoginPage";
 import RegistrationPage from "./pages_spa/RegistrationPage";
 
-import { User } from "./types";
+import { User, UserRole } from "./types";
 import { db } from "./services/dbService";
 
 const Dashboard = lazy(() => import("./pages_spa/Dashboard"));
@@ -69,12 +71,87 @@ const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const Sidebar = () => {
+  const { user, setUser } = useAppContext();
+  const navigate = useNavigate();
+  const isAdmin = user?.role === UserRole.ADMIN;
+
+  const handleLogout = async () => {
+    await db.logout();
+    setUser(null);
+    navigate("/login");
+  };
+
+  const navItems = [
+    { to: "/", icon: "fa-house", label: "ダッシュボード" },
+    { to: "/cases", icon: "fa-folder-open", label: "案件一覧" },
+    { to: "/tree", icon: "fa-sitemap", label: "ティアツリー" },
+    { to: "/stats", icon: "fa-chart-bar", label: "紹介統計" },
+    ...(isAdmin ? [
+      { to: "/agencies", icon: "fa-building", label: "代理店一覧" },
+      { to: "/approvals", icon: "fa-user-check", label: "代理店承認" },
+    ] : []),
+  ];
+
+  return (
+    <div className="sidebar" style={{ padding: "24px 16px", justifyContent: "space-between" }}>
+      <div>
+        <div style={{ padding: "8px 16px 24px", borderBottom: "1px solid rgba(255,255,255,0.1)", marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: "1.1rem", letterSpacing: "0.05em" }}>NetShop</div>
+          <div style={{ fontSize: "0.75rem", opacity: 0.5, marginTop: 4 }}>{user?.name}</div>
+        </div>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              style={({ isActive }) => ({
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderRadius: 12,
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                background: isActive ? "rgba(79,70,229,0.6)" : "transparent",
+                textDecoration: "none",
+                transition: "all 0.2s",
+              })}
+            >
+              <i className={`fa-solid ${item.icon}`} style={{ width: 18, textAlign: "center" }} />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+      <button
+        onClick={handleLogout}
+        style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 16px", borderRadius: 12,
+          background: "transparent", border: "none",
+          color: "rgba(255,255,255,0.5)", cursor: "pointer",
+          fontSize: "0.9rem", fontWeight: 600, width: "100%",
+        }}
+      >
+        <i className="fa-solid fa-right-from-bracket" style={{ width: 18, textAlign: "center" }} />
+        ログアウト
+      </button>
+    </div>
+  );
+};
+
 const Layout = () => {
   return (
-    <div style={{ padding: 40 }}>
-      <Suspense fallback={<Loader />}>
-        <Outlet />
-      </Suspense>
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <div style={{ flex: 1, padding: 40, overflowY: "auto" }}>
+        <Suspense fallback={<Loader />}>
+          <Outlet />
+        </Suspense>
+      </div>
     </div>
   );
 };
