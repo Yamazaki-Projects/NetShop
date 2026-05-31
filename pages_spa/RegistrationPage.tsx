@@ -63,7 +63,6 @@ const RegistrationPage = () => {
       if (result.ok) { 
         const u = await db.getCurrentUser();
         setUser(u);
-        alert('本登録が完了しました。そのままダッシュボードへ移動します。'); 
         navigate('/'); 
       }
     } catch (err: any) { 

@@ -49,6 +49,8 @@ export enum MallOpeningStatus {
   REJECTED = '否決',
 }
 
+export type MembershipPlan = 'free' | '30k' | '198k';
+
 export interface User {
   id: string; // 内部管理用 UUID (Primary Key)
   auth_uid?: string; // Supabase Auth の UID
@@ -62,10 +64,21 @@ export interface User {
   password?: string;
   agencyApplicationStatus?: AgencyApplicationStatus;
   isDeletionPending?: boolean;
-  manualRateOverride?: number; 
-  manualBaseAmountOverride?: number;
+  membershipPlan?: MembershipPlan;
   registrationCode?: string;
   registrationCodeUsedAt?: string | null;
+  createdAt: string;
+}
+
+export interface InitialCommission {
+  id: string;
+  caseId: string;
+  caseCompanyName: string;
+  recipientUserId: string;
+  recipientName: string;
+  amount: number;
+  status: 'pending' | 'paid';
+  paidAt?: string;
   createdAt: string;
 }
 
@@ -107,9 +120,6 @@ export interface Case {
   baseAmount: number;
   deposit: boolean;
   depositAmount: number;
-  appliedRate: number; 
-  isManualAdjustment: boolean;
-  manualAgencyAmount?: number;
   createdAt: string;
   updatedAt: string;
   tasks: CaseTask[];

@@ -63,7 +63,6 @@ const Dashboard = () => {
   const [allCases, setAllCases] = useState<Case[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [approvedCount, setApprovedCount] = useState(0);
-  const [currentRate, setCurrentRate] = useState(0.3);
 
   useEffect(() => {
     if (!user) {
@@ -81,8 +80,7 @@ const Dashboard = () => {
           db.getCases(user),
           db.getAllCases(),
           db.getUsers(),
-          db.getApprovedCount(user.id),
-          db.calculateRate(user.id)
+          db.getApprovedCount(user.id)
         ]);
 
         if (cancelled) return;
@@ -91,7 +89,6 @@ const Dashboard = () => {
         if (results[1].status === 'fulfilled') setAllCases(results[1].value);
         if (results[2].status === 'fulfilled') setUsers(results[2].value);
         if (results[3].status === 'fulfilled') setApprovedCount(results[3].value);
-        if (results[4].status === 'fulfilled') setCurrentRate(results[4].value);
       } catch (e) {
         console.error('[Dashboard] data load error:', e);
       } finally {
@@ -110,16 +107,13 @@ const Dashboard = () => {
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
+  // 20%初期報酬の合計 (承認案件数 × 39,600円 の近似)
   const estimatedRevenue = useMemo(() => {
     try {
       const src = cases || [];
       return src
         .filter((c) => c && c.status === CaseStatus.APPROVED)
-        .reduce((sum, c) => {
-          const manual = c.isManualAdjustment ? Number(c.manualAgencyAmount) || 0 : null;
-          const normal = (Number(c.baseAmount || 0) || 0) * (Number(c.appliedRate || 0) || 0);
-          return sum + (manual !== null ? manual : normal);
-        }, 0);
+        .reduce((sum, c) => sum + (Number(c.baseAmount || 198000) * 0.2), 0);
     } catch {
       return 0;
     }

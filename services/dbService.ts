@@ -6,10 +6,12 @@ import {
   UserStatus,
   AgencyApplicationStatus,
   PlatformType,
-  MallOpeningStatus
+  MallOpeningStatus,
+  InitialCommission,
+  MembershipPlan
 } from '../types';
 import { supabase } from './supabaseClient.browser';
-import { mockUsers, mockCases } from './mockData';
+import { mockUsers, mockCases, mockInitialCommissions } from './mockData';
 
 class DBService {
   private isDemoMode: boolean = !supabase;
@@ -88,6 +90,7 @@ class DBService {
     const normalizedLoginId = loginId.trim().toLowerCase();
 
     if (this.isDemoMode) {
+      console.log("[DBService] Demo login attempt:", normalizedLoginId);
       const user = mockUsers.find(
         (u) =>
           (u.loginId || '').toLowerCase() === normalizedLoginId ||
@@ -104,40 +107,92 @@ class DBService {
     }
 
     try {
-      // usersテーブルからloginIdに対応するメールアドレスを取得（EC0001などの新ID対応）
-      let email = this.toInternalEmail(normalizedLoginId);
-      const { data: userRecord } = await supabase
+      console.log("[DBService] Login attempt for:", normalizedLoginId);
+      
+      // 1. ユーザープロファイルを先に取得して、登録されているメールアドレスを確認する
+      const { data: profileByLoginId, error: profileError } = await supabase
         .from('users')
-        .select('email')
+        .select('email, auth_uid')
         .ilike('login_id', normalizedLoginId)
         .maybeSingle();
-      if (userRecord?.email) email = userRecord.email;
 
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password: pass
-      });
-
-      if (authError || !authData.user) {
-        if (authError?.message?.includes('fetch') || authError?.name === 'TypeError') {
-          this.handleNetworkError(authError);
-        }
-        console.error('Login failed:', authError);
-        return null;
+      if (profileError) {
+        console.error("[DBService] Profile fetch error during login:", profileError);
+        throw profileError;
       }
 
-      const authUid = authData.user.id;
+      // 試行するメールアドレスのリスト
+      const emailsToTry = new Set<string>();
+      
+      // 入力自体がメールアドレス形式ならそれを最優先
+      if (normalizedLoginId.includes('@')) {
+        emailsToTry.add(normalizedLoginId);
+      } else {
+        // ログインID形式なら、生成された内部メールを最初に入れる
+        emailsToTry.add(`${normalizedLoginId}@net-shop.com`);
+      }
+      
+      // プロファイルが見つかれば、そこに登録されているメールも試行リストに追加
+      if (profileByLoginId?.email) {
+        emailsToTry.add((profileByLoginId.email || '').toLowerCase());
+      }
 
+      let lastAuthError: any = null;
+      let authUser: any = null;
+
+      console.log("[DBService] Trying emails:", Array.from(emailsToTry));
+
+      // 候補のメールアドレスで順次ログインを試みる
+      for (const email of Array.from(emailsToTry)) {
+        try {
+          console.log("[DBService] Attempting auth with:", email);
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+            email, 
+            password: pass 
+          });
+          
+          if (!authError && authData.user) {
+            console.log("[DBService] Auth success for:", email);
+            authUser = authData.user;
+            break;
+          }
+          
+          console.warn("[DBService] Auth failed for:", email, authError?.message);
+          lastAuthError = authError;
+        } catch (e: any) {
+          console.error("[DBService] Auth exception for:", email, e);
+          lastAuthError = e;
+          if (e.message?.includes('fetch') || e.name === 'TypeError') {
+             this.handleNetworkError(e);
+          }
+        }
+      }
+
+      if (!authUser) {
+        console.error("[DBService] Login failed for all email candidates. Last error:", lastAuthError);
+        if (lastAuthError?.message?.includes('fetch') || lastAuthError?.name === 'TypeError') {
+          this.handleNetworkError(lastAuthError);
+        }
+        return null;
+      }
+      
+      const authUid = authUser.id;
+
+      // ログイン成功後、auth_uid でプロファイルを再取得
       const { data: profile, error: fetchError } = await supabase
         .from('users')
         .select('*')
         .eq('auth_uid', authUid)
         .maybeSingle();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("[DBService] Profile fetch error after login:", fetchError);
+        throw fetchError;
+      }
 
       // 初回ログイン救済：auth_uid がまだ紐づいていない場合
-      if (!profile) {
+      if (!profile && !normalizedLoginId.includes('@')) {
+        console.log("[DBService] Profile not found by auth_uid, attempting link with login_id:", normalizedLoginId);
         const { data: linkedProfile, error: updateError } = await supabase
           .from('users')
           .update({ auth_uid: authUid })
@@ -145,58 +200,17 @@ class DBService {
           .select()
           .maybeSingle();
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error("[DBService] Profile link error:", updateError);
+          throw updateError;
+        }
         return linkedProfile ? this.mapUser(linkedProfile) : null;
       }
 
-      return this.mapUser(profile);
+      return profile ? this.mapUser(profile) : null;
     } catch (e: any) {
       this.handleNetworkError(e);
       return null;
-    }
-  }
-
-  async updateProfile(userId: string, data: { name?: string; email?: string }): Promise<{ ok: boolean; message?: string }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find(u => u.id === userId);
-      if (user) {
-        if (data.name) user.name = data.name;
-        if (data.email) user.email = data.email;
-        const saved = JSON.parse(localStorage.getItem('netshop_demo_user') || '{}');
-        if (saved.id === userId) {
-          localStorage.setItem('netshop_demo_user', JSON.stringify({ ...saved, ...data }));
-        }
-      }
-      return { ok: true };
-    }
-    try {
-      const updates: any = {};
-      if (data.name) updates.name = data.name;
-      if (data.email) updates.email = data.email;
-
-      const { error } = await supabase.from('users').update(updates).eq('id', userId);
-      if (error) return { ok: false, message: error.message };
-
-      if (data.email) {
-        const { error: authError } = await supabase.auth.updateUser({ email: data.email });
-        if (authError) return { ok: false, message: authError.message };
-      }
-      return { ok: true };
-    } catch (e: any) {
-      this.handleNetworkError(e);
-      return { ok: false, message: e.message };
-    }
-  }
-
-  async updatePassword(newPassword: string): Promise<{ ok: boolean; message?: string }> {
-    if (this.isDemoMode) return { ok: true };
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) return { ok: false, message: error.message };
-      return { ok: true };
-    } catch (e: any) {
-      this.handleNetworkError(e);
-      return { ok: false, message: e.message };
     }
   }
 
@@ -317,7 +331,8 @@ class DBService {
         progressComments: [],
         baseAmount: 198000,
         deposit: false,
-        depositAmount: 30000
+        depositAmount: 30000,
+        customerName: newCaseData.companyName || ''
       };
       mockCases.unshift(newCase);
       return newCase;
@@ -366,8 +381,6 @@ class DBService {
         if (refUser) referrerName = refUser.name;
       }
 
-      const rate = await this.calculateRate(referrerIdForCase);
-
       const { data: lastCases } = await supabase
         .from('cases')
         .select('id')
@@ -403,7 +416,6 @@ class DBService {
         status: CaseStatus.DRAFT,
         platform: PlatformType.RAKUTEN,
         base_amount: 198000,
-        applied_rate: rate,
         customer_type: newCaseData.customerType,
         company_name: newCaseData.companyName,
         company_name_kana: newCaseData.companyNameKana || '',
@@ -633,29 +645,6 @@ class DBService {
     }
   }
 
-  async calculateRate(userId: string): Promise<number> {
-    if (this.isDemoMode) {
-      const approvedCount = mockCases.filter(
-        (c) => (c.referrerId || '').toLowerCase() === (userId || '').toLowerCase() && c.status === CaseStatus.APPROVED
-      ).length;
-      return approvedCount >= 11 ? 0.5 : approvedCount >= 2 ? 0.4 : 0.3;
-    }
-
-    try {
-      const { count } = await supabase
-        .from('cases')
-        .select('*', { count: 'exact', head: true })
-        .eq('referrer_id', userId)
-        .eq('status', CaseStatus.APPROVED);
-
-      const approvedCount = count || 0;
-      return approvedCount >= 11 ? 0.5 : approvedCount >= 2 ? 0.4 : 0.3;
-    } catch (e: any) {
-      this.handleNetworkError(e);
-      return 0.3;
-    }
-  }
-
   async getApprovedCount(userId: string): Promise<number> {
     if (this.isDemoMode) {
       return mockCases.filter(
@@ -673,6 +662,73 @@ class DBService {
     } catch (e: any) {
       this.handleNetworkError(e);
       return 0;
+    }
+  }
+
+  async getInitialCommissions(recipientUserId?: string): Promise<InitialCommission[]> {
+    if (this.isDemoMode) {
+      if (recipientUserId) {
+        return mockInitialCommissions.filter(c => c.recipientUserId === recipientUserId);
+      }
+      return [...mockInitialCommissions];
+    }
+
+    try {
+      let query = supabase.from('initial_commissions').select('*').order('created_at', { ascending: false });
+      if (recipientUserId) query = query.eq('recipient_user_id', recipientUserId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        caseId: r.case_id,
+        caseCompanyName: r.case_company_name,
+        recipientUserId: r.recipient_user_id,
+        recipientName: r.recipient_name,
+        amount: Number(r.amount),
+        status: r.status,
+        paidAt: r.paid_at,
+        createdAt: r.created_at
+      }));
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return [];
+    }
+  }
+
+  async updateInitialCommissionStatus(id: string, status: 'pending' | 'paid'): Promise<{ ok: boolean }> {
+    if (this.isDemoMode) {
+      const c = mockInitialCommissions.find(c => c.id === id);
+      if (c) {
+        c.status = status;
+        c.paidAt = status === 'paid' ? new Date().toISOString() : undefined;
+      }
+      return { ok: true };
+    }
+
+    try {
+      const updates: any = { status };
+      if (status === 'paid') updates.paid_at = new Date().toISOString();
+      const { error } = await supabase.from('initial_commissions').update(updates).eq('id', id);
+      return { ok: !error };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
+  }
+
+  async updateUserMembershipPlan(userId: string, plan: MembershipPlan): Promise<{ ok: boolean }> {
+    if (this.isDemoMode) {
+      const user = mockUsers.find(u => u.id === userId);
+      if (user) user.membershipPlan = plan;
+      return { ok: true };
+    }
+
+    try {
+      const { error } = await supabase.from('users').update({ membership_plan: plan }).eq('id', userId);
+      return { ok: !error };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
     }
   }
 
@@ -875,32 +931,6 @@ class DBService {
     }
   }
 
-  async updateUserRewardConfig(userId: string, config: any, actor: User): Promise<{ ok: boolean }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => u.id === userId);
-      if (user) {
-        user.manualBaseAmountOverride = config.manualBaseAmountOverride;
-        user.manualRateOverride = config.manualRateOverride;
-      }
-      return { ok: true };
-    }
-
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          manual_base_amount_override: config.manualBaseAmountOverride,
-          manual_rate_override: config.manualRateOverride
-        })
-        .eq('id', userId);
-
-      return { ok: !error };
-    } catch (e: any) {
-      this.handleNetworkError(e);
-      return { ok: false };
-    }
-  }
-
   private mapUser(u: any): User {
     if (!u) return {} as User;
     return {
@@ -913,8 +943,7 @@ class DBService {
       status: (u.status as UserStatus) || UserStatus.CUSTOMER,
       referrerId: u.referrer_id || '',
       agencyApplicationStatus: (u.agency_application_status as AgencyApplicationStatus) || AgencyApplicationStatus.NONE,
-      manualRateOverride: u.manual_rate_override,
-      manualBaseAmountOverride: u.manual_base_amount_override,
+      membershipPlan: (u.membership_plan as MembershipPlan) || 'free',
       registrationCode: u.registration_code,
       registrationCodeUsedAt: u.registration_code_used_at,
       createdAt: u.created_at || new Date().toISOString()
@@ -960,9 +989,6 @@ class DBService {
       baseAmount: Number(c.base_amount || 198000),
       deposit: !!c.deposit,
       depositAmount: Number(c.deposit_amount || 30000),
-      appliedRate: Number(c.applied_rate || 0),
-      isManualAdjustment: !!c.is_manual_adjustment,
-      manualAgencyAmount: Number(c.manual_agency_amount || 0),
       tasks: c.tasks || [],
       mallProgress: c.mall_progress || {
         rakuten: MallOpeningStatus.NOT_STARTED,

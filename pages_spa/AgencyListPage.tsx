@@ -2,44 +2,47 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { User, UserRole, UserStatus } from '../types';
-import { Card, Input, Button, Badge } from '../components/UI';
+import { User, UserRole, UserStatus, MembershipPlan } from '../types';
+import { Card, Button, Badge } from '../components/UI';
+
+const PLAN_LABELS: Record<MembershipPlan, string> = {
+  'free': '無料',
+  '30k':  '30,000円',
+  '198k': '198,000円',
+};
+
+const PLAN_COLORS: Record<MembershipPlan, string> = {
+  'free':  '#94a3b8',
+  '30k':   '#f59e0b',
+  '198k':  'var(--primary)',
+};
+
+const PlanBadge = ({ plan }: { plan?: MembershipPlan }) => {
+  const p = plan || 'free';
+  return (
+    <Badge color={PLAN_COLORS[p]} style={{ fontSize: '0.75rem', padding: '3px 10px', fontWeight: 800 }}>
+      {PLAN_LABELS[p]}
+    </Badge>
+  );
+};
 
 const AgencyListPage = () => {
   const { user: currentUser } = useAppContext();
   const [agencies, setAgencies] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statsMap, setStatsMap] = useState<Record<string, { count: number; rate: number }>>({});
-  
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    manualBaseAmountOverride: 198000,
-    manualRateOverride: 0.3
-  });
+  const [editPlan, setEditPlan] = useState<MembershipPlan>('free');
+  const [saving, setSaving] = useState(false);
 
   const loadAgencies = async () => {
     setLoading(true);
     const allUsers = await db.getUsers();
-    const filteredAgencies = allUsers.filter(u => u.status === UserStatus.AGENCY && u.role !== UserRole.ADMIN);
-    setAgencies(filteredAgencies);
-
-    // 各代理店の統計情報を並列取得
-    const stats: Record<string, { count: number; rate: number }> = {};
-    await Promise.all(filteredAgencies.map(async (a) => {
-      const [count, rate] = await Promise.all([
-        db.getApprovedCount(a.id),
-        db.calculateRate(a.id)
-      ]);
-      stats[a.id] = { count, rate };
-    }));
-    setStatsMap(stats);
+    setAgencies(allUsers.filter(u => u.status === UserStatus.AGENCY && u.role !== UserRole.ADMIN));
     setLoading(false);
   };
 
   useEffect(() => {
-    if (currentUser?.role === UserRole.ADMIN) {
-      loadAgencies();
-    }
+    if (currentUser?.role === UserRole.ADMIN) loadAgencies();
   }, [currentUser]);
 
   if (currentUser?.role !== UserRole.ADMIN) {
@@ -47,27 +50,24 @@ const AgencyListPage = () => {
   }
 
   const handleEditClick = (agency: User) => {
-    const stat = statsMap[agency.id];
     setEditingUserId(agency.id);
-    setEditForm({
-      manualBaseAmountOverride: agency.manualBaseAmountOverride || 198000,
-      manualRateOverride: agency.manualRateOverride !== undefined ? agency.manualRateOverride : (stat?.rate || 0.3)
-    });
+    setEditPlan(agency.membershipPlan || 'free');
   };
 
   const handleSave = async () => {
-    if (editingUserId && currentUser) {
-      await db.updateUserRewardConfig(editingUserId, editForm, currentUser);
-      setEditingUserId(null);
-      await loadAgencies(); // リロード
-    }
+    if (!editingUserId) return;
+    setSaving(true);
+    await db.updateUserMembershipPlan(editingUserId, editPlan);
+    setSaving(false);
+    setEditingUserId(null);
+    await loadAgencies();
   };
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '40px', textAlign: 'left' }}>
         <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>代理店管理</h1>
-        <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>代理店パートナーごとの基本報酬条件を設定します。</p>
+        <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>代理店パートナーのメンバーシッププランを管理します。</p>
       </header>
 
       <Card>
@@ -80,33 +80,43 @@ const AgencyListPage = () => {
                 <tr>
                   <th className="align-left">代理店名 / ID</th>
                   <th className="align-left">メールアドレス</th>
-                  <th className="align-center">承認案件数</th>
-                  <th className="align-right">報酬設定</th>
+                  <th className="align-center">メンバーシッププラン</th>
+                  <th className="align-center">報酬率（直/2段）</th>
                   <th className="align-right">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {agencies.map(agency => {
-                  const stat = statsMap[agency.id];
+                  const plan = agency.membershipPlan || 'free';
+                  const directRate = plan === '198k' ? '2%' : '1%';
+                  const secondRate = plan === '198k' ? '1%' : 'なし';
+                  const shopRate  = plan === '198k' ? '4%' : 'なし';
                   return (
                     <tr key={agency.id}>
                       <td className="align-left">
                         <div style={{ fontWeight: 800 }}>{agency.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{(agency.loginId || '').toLowerCase()}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>
+                          {(agency.loginId || '').toLowerCase()}
+                        </div>
                       </td>
                       <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>
                       <td className="align-center">
-                        <Badge color="var(--accent)">{stat?.count || 0} 件</Badge>
+                        <PlanBadge plan={plan} />
                       </td>
-                      <td className="align-right">
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                          ¥{(agency.manualBaseAmountOverride || 198000).toLocaleString()} / {Math.round((agency.manualRateOverride !== undefined ? agency.manualRateOverride : (stat?.rate || 0)) * 100)}%
+                      <td className="align-center">
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.8 }}>
+                          <span style={{ color: 'var(--primary)' }}>自店: {shopRate}</span>
+                          {' / '}直: {directRate}
+                          {' / '}2段: {secondRate}
                         </div>
-                        {agency.manualRateOverride !== undefined && <div style={{ fontSize: '0.65rem', color: 'var(--primary)', fontWeight: 800 }}>個別設定適用中</div>}
                       </td>
                       <td className="align-right">
-                        <Button variant="ghost" onClick={() => handleEditClick(agency)} style={{ border: '1px solid var(--border)', padding: '6px 12px', fontSize: '0.8rem' }}>
-                          設定変更
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleEditClick(agency)}
+                          style={{ border: '1px solid var(--border)', padding: '6px 12px', fontSize: '0.8rem' }}
+                        >
+                          プラン変更
                         </Button>
                       </td>
                     </tr>
@@ -120,32 +130,57 @@ const AgencyListPage = () => {
 
       {editingUserId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ background: 'var(--bg-card)', width: '100%', maxWidth: '480px', borderRadius: '24px', padding: '40px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '24px' }}>報酬条件の個別設定</h2>
-            
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-sub)', fontWeight: 800, marginBottom: '4px' }}>対象代理店</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{agencies.find(a => a.id === editingUserId)?.name}</div>
+          <div style={{ background: 'var(--bg-card)', width: '100%', maxWidth: '440px', borderRadius: '24px', padding: '40px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px' }}>メンバーシッププラン変更</h2>
+            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '28px' }}>
+              {agencies.find(a => a.id === editingUserId)?.name}
             </div>
 
-            <Input 
-              label="案件基本単価 (円)" 
-              type="number" 
-              value={editForm.manualBaseAmountOverride} 
-              onChange={e => setEditForm({...editForm, manualBaseAmountOverride: parseInt(e.target.value, 10)})} 
-            />
-            
-            <Input 
-              label="報酬率 (0.3 = 30%)" 
-              type="number" 
-              step="0.01"
-              value={editForm.manualRateOverride} 
-              onChange={e => setEditForm({...editForm, manualRateOverride: parseFloat(e.target.value)})} 
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
+              {(['free', '30k', '198k'] as MembershipPlan[]).map(plan => {
+                const directRate = plan === '198k' ? '2%' : '1%';
+                const secondRate = plan === '198k' ? '1%' : 'なし';
+                const shopRate   = plan === '198k' ? '4%' : 'なし';
+                const selected   = editPlan === plan;
+                return (
+                  <button
+                    key={plan}
+                    onClick={() => setEditPlan(plan)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      borderRadius: '14px',
+                      border: selected ? `2px solid ${PLAN_COLORS[plan]}` : '2px solid var(--border)',
+                      background: selected ? `${PLAN_COLORS[plan]}15` : 'var(--bg-main)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 900, color: selected ? PLAN_COLORS[plan] : 'var(--text-main)', fontSize: '1rem' }}>
+                        {PLAN_LABELS[plan]}プラン
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700, marginTop: '3px' }}>
+                        自店: {shopRate} / 直紹介: {directRate} / 2段目: {secondRate}
+                      </div>
+                    </div>
+                    {plan === '198k' && (
+                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'white', background: PLAN_COLORS[plan], padding: '2px 8px', borderRadius: '6px' }}>
+                        20%ボーナスあり
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <Button variant="ghost" onClick={() => setEditingUserId(null)} style={{ flex: 1 }}>キャンセル</Button>
-              <Button onClick={handleSave} style={{ flex: 2 }}>設定を保存</Button>
+              <Button onClick={handleSave} disabled={saving} style={{ flex: 2 }}>
+                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : '保存する'}
+              </Button>
             </div>
           </div>
         </div>

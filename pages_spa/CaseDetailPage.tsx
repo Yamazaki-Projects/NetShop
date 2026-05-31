@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment } from '../types';
+import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment, InitialCommission } from '../types';
 import { Card, Button, Badge, Input, Select, Textarea } from '../components/UI';
 import InfoRow from '../components/InfoRow';
 
@@ -30,6 +30,8 @@ const CaseDetailPage = () => {
   const [applicationLoading, setApplicationLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [commission, setCommission] = useState<InitialCommission | null>(null);
+  const [commissionUpdating, setCommissionUpdating] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -43,8 +45,13 @@ const CaseDetailPage = () => {
       const c = await db.getCaseById(id);
       if (c) {
         setCaseData(c);
-        const u = await db.getUserByLoginId(c.id);
+        const [u, commissions] = await Promise.all([
+          db.getUserByLoginId(c.id),
+          db.getInitialCommissions()
+        ]);
         setCustomerUser(u);
+        const caseCommission = commissions.find(ic => (ic.caseId || '').toLowerCase() === (c.id || '').toLowerCase());
+        setCommission(caseCommission || null);
       }
     } catch (err) {
       console.error("Failed to load details", err);
@@ -152,9 +159,16 @@ const CaseDetailPage = () => {
 
   const mallStatusOptions = Object.values(MallOpeningStatus).map(s => ({ label: s, value: s }));
 
-  const agencyAmount = caseData.isManualAdjustment ? (caseData.manualAgencyAmount || 0) : (caseData.baseAmount * caseData.appliedRate);
-
   const isMobile = windowWidth < 1100;
+
+  const handleCommissionStatusToggle = async () => {
+    if (!commission) return;
+    setCommissionUpdating(true);
+    const newStatus = commission.status === 'pending' ? 'paid' : 'pending';
+    await db.updateInitialCommissionStatus(commission.id, newStatus);
+    await loadData();
+    setCommissionUpdating(false);
+  };
 
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto' }} className="animate-fade-in">
@@ -381,9 +395,44 @@ const CaseDetailPage = () => {
           </Card>
 
           {isAdmin && (
-            <Card title="収益サマリー (管理者)" style={{ border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.02)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>代理店報酬</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)' }}>¥{agencyAmount.toLocaleString()}</div>
+            <Card title="初期報酬 (管理者)" style={{ border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.02)' }}>
+              {commission ? (
+                <>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>受取代理店</div>
+                    <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{commission.recipientName}</div>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>報酬額 (20%)</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)' }}>¥{commission.amount.toLocaleString()}</div>
+                  </div>
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '6px' }}>支払い状況</div>
+                    <span style={{
+                      fontSize: '0.8rem', fontWeight: 800, padding: '4px 12px', borderRadius: '8px',
+                      background: commission.status === 'paid' ? '#dcfce7' : '#fef3c7',
+                      color: commission.status === 'paid' ? '#16a34a' : '#b45309'
+                    }}>
+                      {commission.status === 'paid' ? `支払済 (${commission.paidAt ? new Date(commission.paidAt).toLocaleDateString('ja-JP') : ''})` : '未払い'}
+                    </span>
+                  </div>
+                  <Button
+                    onClick={handleCommissionStatusToggle}
+                    disabled={commissionUpdating}
+                    variant={commission.status === 'paid' ? 'ghost' : undefined}
+                    style={{ width: '100%', fontSize: '0.8rem' }}
+                  >
+                    {commissionUpdating
+                      ? <i className="fa-solid fa-spinner fa-spin"></i>
+                      : commission.status === 'paid' ? '未払いに戻す' : '支払済にする'}
+                  </Button>
+                </>
+              ) : (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)', fontWeight: 700, padding: '8px 0' }}>
+                  この案件の初期報酬レコードがありません。<br />
+                  <span style={{ fontSize: '0.75rem' }}>（案件承認時に自動生成されます）</span>
+                </div>
+              )}
             </Card>
           )}
         </div>
