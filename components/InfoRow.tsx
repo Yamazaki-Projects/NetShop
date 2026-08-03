@@ -34,10 +34,22 @@ const InfoRow: React.FC<InfoRowProps> = ({
     }
   };
 
+  const displayValue = () => {
+    if (type === 'date' && value) {
+      return <>{value} <span style={{ color: 'var(--text-sub)', fontSize: '0.75rem' }}>（{formatToWareki(String(value))}）</span></>;
+    }
+    if (type === 'select' && options) {
+      const matched = options.find(o => o.value === String(value ?? ''));
+      return matched?.label || value || <span style={{ color: 'var(--border)' }}>---</span>;
+    }
+    return value || <span style={{ color: 'var(--border)' }}>---</span>;
+  };
+
   return (
     <div style={{
       display: 'flex',
       flexDirection: layout === 'vertical' ? 'column' : 'row',
+      flexWrap: layout === 'vertical' ? undefined : 'wrap',
       borderBottom: '1px solid var(--border)',
       padding: '14px 0',
       alignItems: layout === 'vertical' ? 'flex-start' : 'center',
@@ -45,6 +57,7 @@ const InfoRow: React.FC<InfoRowProps> = ({
     }}>
       <div style={{
         width: layout === 'vertical' ? '100%' : labelWidth,
+        minWidth: layout === 'vertical' ? undefined : labelWidth,
         color: 'var(--text-sub)',
         fontWeight: 800,
         fontSize: '0.75rem',
@@ -54,7 +67,7 @@ const InfoRow: React.FC<InfoRowProps> = ({
       }}>
         {label}
       </div>
-      <div style={{ flex: 1, width: '100%', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.9rem' }}>
+      <div style={{ flex: '1 1 180px', minWidth: '180px', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.9rem' }}>
         {isEditing && field ? (
           <>
             {type === 'select' ? (
@@ -85,11 +98,7 @@ const InfoRow: React.FC<InfoRowProps> = ({
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '44px' }}>
             <div style={{ flex: 1, whiteSpace: 'pre-wrap' }}>
-              {type === 'date' && value ? (
-                <>{value} <span style={{ color: 'var(--text-sub)', fontSize: '0.75rem' }}>（{formatToWareki(String(value))}）</span></>
-              ) : (
-                value || <span style={{ color: 'var(--border)' }}>---</span>
-              )}
+              {displayValue()}
             </div>
             {!isEditing && value && type !== 'textarea' && (
               <button

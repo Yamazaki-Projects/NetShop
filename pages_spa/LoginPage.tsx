@@ -49,7 +49,7 @@ const LoginPage = () => {
               value={loginId} 
               onChange={(e) => setLoginId(e.target.value)} 
               required 
-              placeholder="admin または 顧客ID" 
+              placeholder="顧客ID"
               autoComplete="username"
             />
             <Input 
@@ -70,19 +70,6 @@ const LoginPage = () => {
             <Button type="submit" disabled={loading} style={{ width: '100%', height: '50px' }}>
               {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'ログイン'}
             </Button>
-
-            <div style={{ marginTop: '20px', padding: '12px', background: 'rgba(79, 70, 229, 0.05)', borderRadius: '10px', fontSize: '0.8rem', color: 'var(--text-sub)' }}>
-              <p style={{ fontWeight: 800, marginBottom: '4px', color: 'var(--primary)' }}>
-                <i className="fa-solid fa-circle-info" style={{ marginRight: '6px' }}></i>
-                デモ用ログイン情報
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>ID: <code style={{ fontWeight: 900, color: 'var(--text-main)' }}>admin</code></div>
-                <div>PW: <code style={{ fontWeight: 900, color: 'var(--text-main)' }}>demo</code></div>
-                <div>ID: <code style={{ fontWeight: 900, color: 'var(--text-main)' }}>PA0001</code></div>
-                <div>PW: <code style={{ fontWeight: 900, color: 'var(--text-main)' }}>demo</code></div>
-              </div>
-            </div>
 
             <div style={{ marginTop: '32px', textAlign: 'center', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
               <Link to="/register" style={{ fontSize: '0.9rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>

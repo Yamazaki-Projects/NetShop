@@ -135,14 +135,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 3) users テーブルの更新（プロファイルを代理店へ）
+    // 3) users テーブルの更新（プロファイルを有効化・ロールを保持）
     // login_id を正規化したものを使用して更新
     const { error: upDbErr } = await supabase
       .from("users")
       .update({
         auth_uid: authUserId,
         status: "agency",
-        role: "agency",
+        role: u.role || "agency",
         registration_code_used_at: new Date().toISOString(),
       })
       .ilike("login_id", login_id);

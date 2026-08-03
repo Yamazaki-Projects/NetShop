@@ -85,7 +85,7 @@ const RegistrationPage = () => {
             <form onSubmit={handleVerify}>
               <Input 
                 label="顧客ID" 
-                placeholder="PA0001" 
+                placeholder="pa0001"
                 value={customerId} 
                 onChange={e => setCustomerId(e.target.value)} 
                 required 

@@ -1,8 +1,13 @@
 
 export enum UserRole {
   ADMIN = 'admin',
+  CO_OWNER = 'co_owner',
+  EXECUTIVE = 'executive',
   AGENCY = 'agency',
 }
+
+export const isAdminRole = (role?: UserRole): boolean =>
+  role === UserRole.ADMIN || role === UserRole.CO_OWNER || role === UserRole.EXECUTIVE;
 
 export enum UserStatus {
   CUSTOMER = 'customer',
@@ -87,6 +92,7 @@ export interface Case {
   agencyId: string;
   agencyName: string;
   referrerId?: string;
+  sortOrder?: number; // ティアツリーでの兄弟ノード表示順（手動並び替え用）
   status: CaseStatus;
   platform: PlatformType;
   customerType: 'corporation' | 'sole_proprietor';
@@ -128,8 +134,11 @@ export interface Case {
   subline: SublineInfo;
   emailJp: EmailJpInfo;
   rakutenInfo: RakutenInfo;
+  mercariInfo?: MercariInfo;
+  aupayInfo?: AupayInfo;
   mallProgress: MallProgress;
   progressComments: ProgressComment[];
+  mercariFreeInput?: string;
   yahooFreeInput?: string;
   aupayFreeInput?: string;
 }
@@ -165,12 +174,27 @@ export interface CaseReview {
 }
 
 export interface SublineInfo {
+  phoneType?: '050' | 'landline';
   number050?: string;
   siteType: 'subline' | 'other';
   loginId?: string;
   password?: string;
   otherUrl?: string;
   status: 'active' | 'pending' | 'none';
+}
+
+export interface MercariInfo {
+  email?: string;
+  password?: string;
+  phone?: string;
+}
+
+export interface AupayInfo {
+  email?: string;
+  wowManagerId?: string;
+  wowManagerPass?: string;
+  salonId?: string;
+  salonPass?: string;
 }
 
 export interface EmailJpInfo {
@@ -195,8 +219,9 @@ export interface RakutenInfo {
 
 export interface MallProgress {
   rakuten: MallOpeningStatus;
-  yahoo: MallOpeningStatus;
+  mercari: MallOpeningStatus;
   aupay: MallOpeningStatus;
+  yahoo: MallOpeningStatus;
 }
 
 export interface AuditLog {
@@ -207,5 +232,37 @@ export interface AuditLog {
   targetType: 'case' | 'agency' | 'user' | 'referral';
   targetId: string;
   metadata: any;
+  createdAt: string;
+}
+
+// 月次報酬分配（モール側から届く報酬明細をECP・紹介者2段階に分配する仕組み）
+export type RewardRecipientType = 'l1' | 'l2' | 'ecp';
+
+export interface RewardBatch {
+  id: string;
+  month: string; // 'YYYY-MM'
+  createdAt: string;
+}
+
+export interface RewardRow {
+  id: string;
+  batchId: string;
+  ownerName: string; // モール明細に記載のオーナー(代表者)名
+  mallType: string; // '楽天' | 'メルカリ' など、明細の表記そのまま
+  shopUrl?: string;
+  salesAmount?: number; // 明細の売上らしき数値（参考値）
+  rewardAmount: number; // 分配対象の報酬額 R
+  matchedCaseId?: string | null; // 自動/手動マッチング済みの案件ID
+  createdAt: string;
+}
+
+export interface RewardPayout {
+  id: string;
+  batchId: string;
+  rowId: string;
+  recipientType: RewardRecipientType;
+  recipientUserId?: string | null; // ECPの場合はnull
+  recipientName: string;
+  amount: number;
   createdAt: string;
 }

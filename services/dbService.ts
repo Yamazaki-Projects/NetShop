@@ -8,14 +8,15 @@ import {
   PlatformType,
   MallOpeningStatus,
   InitialCommission,
-  MembershipPlan
+  MembershipPlan,
+  isAdminRole,
+  RewardBatch,
+  RewardRow,
+  RewardPayout
 } from '../types';
 import { supabase } from './supabaseClient.browser';
-import { mockUsers, mockCases, mockInitialCommissions } from './mockData';
 
 class DBService {
-  private isDemoMode: boolean = !supabase;
-
   private handleNetworkError(e: any): never {
     if (e?.message?.includes('fetch') || e?.message?.includes('NetworkError')) {
       throw new Error('ネットワークエラーが発生しました。インターネット接続を確認するか、しばらく時間をおいてから再試行してください。');
@@ -51,18 +52,6 @@ class DBService {
   }
 
   async getCurrentUser(): Promise<User | null> {
-    if (this.isDemoMode) {
-      const savedUser = localStorage.getItem('netshop_demo_user');
-      if (savedUser) {
-        try {
-          return JSON.parse(savedUser);
-        } catch {
-          return null;
-        }
-      }
-      return null;
-    }
-
     try {
       const {
         data: { session },
@@ -89,27 +78,9 @@ class DBService {
   async login(loginId: string, pass: string): Promise<User | null> {
     const normalizedLoginId = loginId.trim().toLowerCase();
 
-    if (this.isDemoMode) {
-      console.log("[DBService] Demo login attempt:", normalizedLoginId);
-      const user = mockUsers.find(
-        (u) =>
-          (u.loginId || '').toLowerCase() === normalizedLoginId ||
-          (u.email || '').toLowerCase() === normalizedLoginId
-      );
-
-      const isPassOk = user && (((user as any).password === pass) || pass === 'demo');
-
-      if (user && isPassOk) {
-        localStorage.setItem('netshop_demo_user', JSON.stringify(user));
-        return user;
-      }
-      return null;
-    }
-
     try {
       console.log("[DBService] Login attempt for:", normalizedLoginId);
-      
-      // 1. ユーザープロファイルを先に取得して、登録されているメールアドレスを確認する
+
       const { data: profileByLoginId, error: profileError } = await supabase
         .from('users')
         .select('email, auth_uid')
@@ -121,18 +92,14 @@ class DBService {
         throw profileError;
       }
 
-      // 試行するメールアドレスのリスト
       const emailsToTry = new Set<string>();
-      
-      // 入力自体がメールアドレス形式ならそれを最優先
+
       if (normalizedLoginId.includes('@')) {
         emailsToTry.add(normalizedLoginId);
       } else {
-        // ログインID形式なら、生成された内部メールを最初に入れる
         emailsToTry.add(`${normalizedLoginId}@net-shop.com`);
       }
-      
-      // プロファイルが見つかれば、そこに登録されているメールも試行リストに追加
+
       if (profileByLoginId?.email) {
         emailsToTry.add((profileByLoginId.email || '').toLowerCase());
       }
@@ -142,28 +109,27 @@ class DBService {
 
       console.log("[DBService] Trying emails:", Array.from(emailsToTry));
 
-      // 候補のメールアドレスで順次ログインを試みる
       for (const email of Array.from(emailsToTry)) {
         try {
           console.log("[DBService] Attempting auth with:", email);
-          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
-            email, 
-            password: pass 
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password: pass
           });
-          
+
           if (!authError && authData.user) {
             console.log("[DBService] Auth success for:", email);
             authUser = authData.user;
             break;
           }
-          
+
           console.warn("[DBService] Auth failed for:", email, authError?.message);
           lastAuthError = authError;
         } catch (e: any) {
           console.error("[DBService] Auth exception for:", email, e);
           lastAuthError = e;
           if (e.message?.includes('fetch') || e.name === 'TypeError') {
-             this.handleNetworkError(e);
+            this.handleNetworkError(e);
           }
         }
       }
@@ -175,10 +141,9 @@ class DBService {
         }
         return null;
       }
-      
+
       const authUid = authUser.id;
 
-      // ログイン成功後、auth_uid でプロファイルを再取得
       const { data: profile, error: fetchError } = await supabase
         .from('users')
         .select('*')
@@ -190,7 +155,6 @@ class DBService {
         throw fetchError;
       }
 
-      // 初回ログイン救済：auth_uid がまだ紐づいていない場合
       if (!profile && !normalizedLoginId.includes('@')) {
         console.log("[DBService] Profile not found by auth_uid, attempting link with login_id:", normalizedLoginId);
         const { data: linkedProfile, error: updateError } = await supabase
@@ -215,11 +179,6 @@ class DBService {
   }
 
   async logout(): Promise<void> {
-    if (this.isDemoMode) {
-      localStorage.removeItem('netshop_demo_user');
-      return;
-    }
-
     try {
       await supabase.auth.signOut();
     } catch (e: any) {
@@ -231,8 +190,6 @@ class DBService {
   }
 
   async getUsers(): Promise<User[]> {
-    if (this.isDemoMode) return mockUsers;
-
     try {
       const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
       if (error) {
@@ -248,19 +205,17 @@ class DBService {
   async getCases(user: User): Promise<Case[]> {
     if (!user) return [];
 
-    if (this.isDemoMode) {
-      const uId = (user.id || '').toLowerCase();
-      const lId = (user.loginId || '').toLowerCase();
-      return mockCases.filter((c) => {
-        const rId = (c.referrerId || '').toLowerCase();
-        return rId === uId || (lId && rId === lId);
-      });
-    }
-
     try {
       const { data: allData, error } = await supabase.from('cases').select('*');
       if (error) throw error;
       if (!allData) return [];
+
+      // admin/co_owner/executive は全案件を表示
+      if (isAdminRole(user.role)) {
+        return allData
+          .map((c: any) => this.mapCase(c))
+          .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      }
 
       const uId = (user.id || '').toLowerCase();
       const lId = (user.loginId || '').toLowerCase();
@@ -280,8 +235,6 @@ class DBService {
   }
 
   async getAllCases(): Promise<Case[]> {
-    if (this.isDemoMode) return mockCases;
-
     try {
       const { data, error } = await supabase.from('cases').select('*').order('updated_at', { ascending: false });
       if (error) {
@@ -295,10 +248,6 @@ class DBService {
   }
 
   async getCaseById(id: string): Promise<Case | null> {
-    if (this.isDemoMode) {
-      return mockCases.find((c) => (c.id || '').toLowerCase() === (id || '').toLowerCase()) || null;
-    }
-
     try {
       const { data, error } = await supabase.from('cases').select('*').ilike('id', id).maybeSingle();
       if (error) throw error;
@@ -309,35 +258,6 @@ class DBService {
   }
 
   async createCase(newCaseData: any, actor: User, customReferrerId?: string): Promise<Case | null> {
-    if (this.isDemoMode) {
-      const newCase: Case = {
-        ...newCaseData,
-        id: `pa${String(mockCases.length + 1).padStart(4, '0')}`,
-        referrerId: customReferrerId || actor.id,
-        status: CaseStatus.SUBMITTED,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tasks: [],
-        documents: [],
-        reviews: [],
-        mallProgress: {
-          rakuten: MallOpeningStatus.NOT_STARTED,
-          yahoo: MallOpeningStatus.NOT_STARTED,
-          aupay: MallOpeningStatus.NOT_STARTED
-        },
-        subline: { status: 'none', siteType: 'subline' },
-        emailJp: { status: 'none', domainType: 'email_jp' },
-        rakutenInfo: { needsShipping: 'unnecessary' },
-        progressComments: [],
-        baseAmount: 198000,
-        deposit: false,
-        depositAmount: 30000,
-        customerName: newCaseData.companyName || ''
-      };
-      mockCases.unshift(newCase);
-      return newCase;
-    }
-
     try {
       const {
         data: { session }
@@ -413,18 +333,25 @@ class DBService {
         agency_id: referrerIdForCase,
         agency_name: referrerName,
         referrer_id: referrerIdForCase,
+        sort_order: Date.now(),
         status: CaseStatus.DRAFT,
         platform: PlatformType.RAKUTEN,
         base_amount: 198000,
         customer_type: newCaseData.customerType,
         company_name: newCaseData.companyName,
         company_name_kana: newCaseData.companyNameKana || '',
-        representative_name: newCaseData.repName,
-        representative_name_kana: newCaseData.repNameKana || '',
-        rep_name: newCaseData.repName,
-        rep_name_kana: newCaseData.repNameKana || '',
+        representative_name: [newCaseData.repLastName, newCaseData.repFirstName].filter(Boolean).join(' ') || newCaseData.repName || '',
+        rep_last_name: newCaseData.repLastName || '',
+        rep_first_name: newCaseData.repFirstName || '',
+        // 個人事業主は「代表取締役情報」カード自体が表示されないため、案件詳細で
+        // 常に表示される「担当者情報」側にも同じ名前を入れておく（法人はここを
+        // 別の担当者用に空けておきたいので対象外）。
+        ...(newCaseData.customerType === 'sole_proprietor' ? {
+          staff_last_name: newCaseData.repLastName || '',
+          staff_first_name: newCaseData.repFirstName || ''
+        } : {}),
         phone: newCaseData.phone || '',
-        email: newCaseData.email,
+        email: newCaseData.email || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -443,7 +370,7 @@ class DBService {
       const newUser = {
         login_id: nextId,
         email: this.toInternalEmail(nextId),
-        name: newCaseData.companyName || newCaseData.repName,
+        name: [newCaseData.repLastName, newCaseData.repFirstName].filter(Boolean).join(' ') || newCaseData.companyName || newCaseData.repName,
         role: UserRole.AGENCY,
         status: UserStatus.CUSTOMER,
         referrer_id: referrerUuidForUser,
@@ -457,6 +384,19 @@ class DBService {
         throw new Error(`案件は作成されましたが、ユーザープロファイルの作成に失敗しました: ${userError.message}`);
       }
 
+      // 案件登録時に初期報酬レコードを自動生成
+      if (referrerUuidForUser) {
+        await supabase.from('initial_commissions').insert([{
+          case_id: nextId,
+          case_company_name: newCaseData.companyName || newCaseData.repName,
+          recipient_user_id: referrerUuidForUser,
+          recipient_name: referrerName,
+          amount: Math.floor(198000 * 0.2),
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }]);
+      }
+
       return caseResult ? this.mapCase(caseResult) : null;
     } catch (e: any) {
       this.handleNetworkError(e);
@@ -464,15 +404,6 @@ class DBService {
   }
 
   async updateCase(id: string, updates: any, actor: User): Promise<Case | null> {
-    if (this.isDemoMode) {
-      const idx = mockCases.findIndex((c) => (c.id || '').toLowerCase() === (id || '').toLowerCase());
-      if (idx !== -1) {
-        mockCases[idx] = { ...mockCases[idx], ...updates, updatedAt: new Date().toISOString() };
-        return mockCases[idx];
-      }
-      return null;
-    }
-
     try {
       const dbUpdates: any = { updated_at: new Date().toISOString() };
       const mappings: Record<string, string> = {
@@ -492,15 +423,15 @@ class DBService {
         email: 'email',
         mallProgress: 'mall_progress',
         rakutenInfo: 'rakuten_info',
+        mercariInfo: 'mercari_info',
+        aupayInfo: 'aupay_info',
         subline: 'subline',
         emailJp: 'email_jp',
         tasks: 'tasks',
-        isManualAdjustment: 'is_manual_adjustment',
-        manualAgencyAmount: 'manual_agency_amount',
         baseAmount: 'base_amount',
         progressComments: 'progress_comments',
+        mercariFreeInput: 'mercari_free_input',
         yahooFreeInput: 'yahoo_free_input',
-        aupayFreeInput: 'aupay_free_input',
         companyZipCode: 'company_zip_code',
         companyAddress: 'company_address',
         companyAddressKana: 'company_address_kana',
@@ -541,15 +472,95 @@ class DBService {
     }
   }
 
-  async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean; error?: any }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => (u.loginId || '').toLowerCase() === (caseData.id || '').toLowerCase());
-      if (user) {
-        user.agencyApplicationStatus = AgencyApplicationStatus.PENDING;
-      }
-      return { ok: true };
-    }
+  // 顧客(案件)を削除する。管理者は誰でも、一般代理店は自分が直接紹介した顧客のみ削除できる。
+  // 削除する顧客がさらに他の顧客を紹介している場合は、その紹介先を削除する顧客自身の
+  // 紹介者（祖父母）に繰り上げてから削除し、紹介チェーンが途切れないようにする。
+  async deleteCase(caseId: string, actor: User): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const { data: targetCase, error: fetchError } = await supabase
+        .from('cases')
+        .select('*')
+        .ilike('id', caseId)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+      if (!targetCase) return { ok: false, error: '案件が見つかりません。' };
 
+      if (!isAdminRole(actor.role)) {
+        const refId = (targetCase.referrer_id || '').toLowerCase();
+        const actorId = (actor.id || '').toLowerCase();
+        const actorLoginId = (actor.loginId || '').toLowerCase();
+        if (refId !== actorId && refId !== actorLoginId) {
+          return { ok: false, error: '自分が直接紹介した顧客のみ削除できます。' };
+        }
+      }
+
+      const { data: targetUser } = await supabase
+        .from('users')
+        .select('id, login_id')
+        .ilike('login_id', targetCase.id)
+        .maybeSingle();
+
+      const targetIdentifiers = [targetCase.id, targetUser?.id, targetUser?.login_id]
+        .filter(Boolean)
+        .map((v: string) => v.toLowerCase());
+      const newReferrerId = targetCase.referrer_id || null;
+
+      const { data: allCasesData } = await supabase.from('cases').select('id, referrer_id');
+      const childCaseIds = (allCasesData || [])
+        .filter((c: any) => targetIdentifiers.includes((c.referrer_id || '').toLowerCase()))
+        .map((c: any) => c.id);
+      if (childCaseIds.length > 0) {
+        const { error: reparentCasesError } = await supabase
+          .from('cases')
+          .update({ referrer_id: newReferrerId })
+          .in('id', childCaseIds);
+        if (reparentCasesError) throw reparentCasesError;
+      }
+
+      const { data: allUsersData } = await supabase.from('users').select('id, referrer_id');
+      const childUserIds = (allUsersData || [])
+        .filter((u: any) => targetIdentifiers.includes((u.referrer_id || '').toLowerCase()))
+        .map((u: any) => u.id);
+      if (childUserIds.length > 0) {
+        const { error: reparentUsersError } = await supabase
+          .from('users')
+          .update({ referrer_id: newReferrerId })
+          .in('id', childUserIds);
+        if (reparentUsersError) throw reparentUsersError;
+      }
+
+      await supabase.from('initial_commissions').delete().ilike('case_id', targetCase.id);
+
+      if (targetUser?.id) {
+        const { error: userDeleteError } = await supabase.from('users').delete().eq('id', targetUser.id);
+        if (userDeleteError) throw userDeleteError;
+      }
+
+      const { error: caseDeleteError } = await supabase.from('cases').delete().ilike('id', targetCase.id);
+      if (caseDeleteError) throw caseDeleteError;
+
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, error: e?.message || '削除に失敗しました。' };
+    }
+  }
+
+  // ティアツリー(リスト表示)での兄弟ノード間の並び替え。2件のsort_orderを入れ替える。
+  async swapCaseSortOrder(caseIdA: string, sortOrderA: number, caseIdB: string, sortOrderB: number): Promise<{ ok: boolean }> {
+    try {
+      const { error: errorA } = await supabase.from('cases').update({ sort_order: sortOrderB }).ilike('id', caseIdA);
+      if (errorA) throw errorA;
+      const { error: errorB } = await supabase.from('cases').update({ sort_order: sortOrderA }).ilike('id', caseIdB);
+      if (errorB) throw errorB;
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
+  }
+
+  async applyForAgency(caseData: Case, actor: User): Promise<{ ok: boolean; error?: any }> {
     try {
       const {
         data: { session }
@@ -565,24 +576,35 @@ class DBService {
 
       if (!me) return { ok: false, error: { message: '現在のユーザープロフィールが見つかりません。' } };
 
-      const referrerUuid = me.id;
       const normalizedLoginId = (caseData.id || '').toLowerCase();
+
+      // 既存のreferrer_idを確認し、設定済みの場合は上書きしない
+      const [{ data: targetUser }, { data: targetCase }] = await Promise.all([
+        supabase.from('users').select('referrer_id').ilike('login_id', normalizedLoginId).maybeSingle(),
+        supabase.from('cases').select('referrer_id').ilike('id', normalizedLoginId).maybeSingle(),
+      ]);
+
+      const userUpdatePayload: Record<string, any> = {
+        agency_application_status: AgencyApplicationStatus.PENDING,
+        email: this.toInternalEmail(caseData.id),
+        name: caseData.companyName || `${caseData.repLastName || ''} ${caseData.repFirstName || ''}`.trim() || '新規顧客'
+      };
+      if (!targetUser?.referrer_id) {
+        userUpdatePayload.referrer_id = me.id;
+      }
 
       const { data, error } = await supabase
         .from('users')
-        .update({
-          agency_application_status: AgencyApplicationStatus.PENDING,
-          referrer_id: referrerUuid,
-          email: this.toInternalEmail(caseData.id),
-          name: caseData.companyName || `${caseData.repLastName || ''} ${caseData.repFirstName || ''}`.trim() || '新規顧客'
-        })
+        .update(userUpdatePayload)
         .ilike('login_id', normalizedLoginId)
         .select();
 
-      await supabase
-        .from('cases')
-        .update({ referrer_id: referrerUuid })
-        .ilike('id', normalizedLoginId);
+      if (!targetCase?.referrer_id) {
+        await supabase
+          .from('cases')
+          .update({ referrer_id: me.id })
+          .ilike('id', normalizedLoginId);
+      }
 
       return { ok: !error && !!data && data.length > 0, error };
     } catch (e: any) {
@@ -592,15 +614,6 @@ class DBService {
   }
 
   async approveApplication(loginId: string): Promise<{ ok: boolean; message?: string }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
-      if (user) {
-        user.agencyApplicationStatus = AgencyApplicationStatus.APPROVED;
-        user.registrationCode = this.generateRandomCode();
-      }
-      return { ok: true };
-    }
-
     try {
       const code = this.generateRandomCode();
       const { error } = await supabase
@@ -619,14 +632,53 @@ class DBService {
     }
   }
 
-  async reissueRegistrationCode(loginId: string): Promise<{ ok: boolean; code?: string }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
-      const newCode = this.generateRandomCode();
-      if (user) user.registrationCode = newCode;
-      return { ok: true, code: newCode };
-    }
+  async createAdminUser(name: string, loginId: string, role: UserRole): Promise<{ ok: boolean; code?: string; error?: string }> {
+    try {
+      const normalizedId = loginId.trim().toLowerCase();
 
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('login_id', normalizedId)
+        .maybeSingle();
+
+      if (existing) return { ok: false, error: 'このログインIDは既に使用されています。' };
+
+      const code = this.generateRandomCode();
+      const { error } = await supabase.from('users').insert([{
+        login_id: normalizedId,
+        email: `${normalizedId}@net-shop.com`,
+        name,
+        role,
+        status: UserStatus.CUSTOMER,
+        agency_application_status: AgencyApplicationStatus.APPROVED,
+        registration_code: code,
+        membership_plan: '198k',
+        created_at: new Date().toISOString(),
+      }]);
+
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, code };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async cancelAgencyApplication(loginId: string): Promise<{ ok: boolean; error?: any }> {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ agency_application_status: AgencyApplicationStatus.NONE })
+        .ilike('login_id', loginId);
+      return { ok: !error, error };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, error: e };
+    }
+  }
+
+  async reissueRegistrationCode(loginId: string): Promise<{ ok: boolean; code?: string }> {
     try {
       const newCode = this.generateRandomCode();
       const { error } = await supabase
@@ -646,12 +698,6 @@ class DBService {
   }
 
   async getApprovedCount(userId: string): Promise<number> {
-    if (this.isDemoMode) {
-      return mockCases.filter(
-        (c) => (c.referrerId || '').toLowerCase() === (userId || '').toLowerCase() && c.status === CaseStatus.APPROVED
-      ).length;
-    }
-
     try {
       const { count } = await supabase
         .from('cases')
@@ -666,13 +712,6 @@ class DBService {
   }
 
   async getInitialCommissions(recipientUserId?: string): Promise<InitialCommission[]> {
-    if (this.isDemoMode) {
-      if (recipientUserId) {
-        return mockInitialCommissions.filter(c => c.recipientUserId === recipientUserId);
-      }
-      return [...mockInitialCommissions];
-    }
-
     try {
       let query = supabase.from('initial_commissions').select('*').order('created_at', { ascending: false });
       if (recipientUserId) query = query.eq('recipient_user_id', recipientUserId);
@@ -695,16 +734,17 @@ class DBService {
     }
   }
 
-  async updateInitialCommissionStatus(id: string, status: 'pending' | 'paid'): Promise<{ ok: boolean }> {
-    if (this.isDemoMode) {
-      const c = mockInitialCommissions.find(c => c.id === id);
-      if (c) {
-        c.status = status;
-        c.paidAt = status === 'paid' ? new Date().toISOString() : undefined;
-      }
-      return { ok: true };
+  async updateInitialCommissionAmount(id: string, amount: number): Promise<{ ok: boolean }> {
+    try {
+      const { error } = await supabase.from('initial_commissions').update({ amount }).eq('id', id);
+      return { ok: !error };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
     }
+  }
 
+  async updateInitialCommissionStatus(id: string, status: 'pending' | 'paid'): Promise<{ ok: boolean }> {
     try {
       const updates: any = { status };
       if (status === 'paid') updates.paid_at = new Date().toISOString();
@@ -716,13 +756,29 @@ class DBService {
     }
   }
 
-  async updateUserMembershipPlan(userId: string, plan: MembershipPlan): Promise<{ ok: boolean }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find(u => u.id === userId);
-      if (user) user.membershipPlan = plan;
+  async updateUserProfile(userId: string, updates: { name: string }): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.from('users').update({ name: updates.name }).eq('id', userId);
+      if (error) return { ok: false, error: error.message };
       return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, error: '更新に失敗しました' };
     }
+  }
 
+  async updatePassword(newPassword: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, error: 'パスワード更新に失敗しました' };
+    }
+  }
+
+  async updateUserMembershipPlan(userId: string, plan: MembershipPlan): Promise<{ ok: boolean }> {
     try {
       const { error } = await supabase.from('users').update({ membership_plan: plan }).eq('id', userId);
       return { ok: !error };
@@ -734,30 +790,6 @@ class DBService {
 
   async getTeamCases(user: User): Promise<Case[]> {
     if (!user) return [];
-
-    if (this.isDemoMode) {
-      const uId = (user.id || '').toLowerCase();
-      const lId = (user.loginId || '').toLowerCase();
-
-      const getDownlineIds = (parentUserId: string, parentLoginId: string, isRoot: boolean = true): string[] => {
-        const children = mockCases.filter((c) => {
-          const rId = (c.referrerId || '').toLowerCase();
-          return rId === (parentUserId || '').toLowerCase() || rId === (parentLoginId || '').toLowerCase();
-        });
-
-        let ids: string[] = isRoot ? [] : children.map((c) => c.id);
-        for (const child of children) {
-          const linkedUser = mockUsers.find((u) => (u.loginId || '').toLowerCase() === (child.id || '').toLowerCase());
-          if (linkedUser) {
-            ids = [...ids, ...getDownlineIds(linkedUser.id, linkedUser.loginId, false)];
-          }
-        }
-        return ids;
-      };
-
-      const downlineIds = Array.from(new Set(getDownlineIds(uId, lId, true)));
-      return mockCases.filter((c) => downlineIds.includes(c.id));
-    }
 
     try {
       const { data: allCasesData, error: cError } = await supabase.from('cases').select('id, referrer_id');
@@ -809,10 +841,6 @@ class DBService {
   async getUserByEmail(email: string): Promise<User | null> {
     if (!email) return null;
 
-    if (this.isDemoMode) {
-      return mockUsers.find((u) => (u.email || '').toLowerCase() === email.trim().toLowerCase()) || null;
-    }
-
     try {
       const { data, error } = await supabase
         .from('users')
@@ -830,10 +858,6 @@ class DBService {
 
   async getUserByLoginId(loginId: string): Promise<User | null> {
     if (!loginId) return null;
-
-    if (this.isDemoMode) {
-      return mockUsers.find((u) => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase()) || null;
-    }
 
     try {
       const { data, error } = await supabase
@@ -854,12 +878,6 @@ class DBService {
     loginId: string,
     registrationCode: string
   ): Promise<{ ok: boolean; reason?: string; email?: string }> {
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => (u.loginId || '').toLowerCase() === loginId.trim().toLowerCase());
-      if (!user) return { ok: false, reason: 'not_found' };
-      return { ok: true, email: user.email };
-    }
-
     try {
       const { data: user } = await supabase
         .from('users')
@@ -886,15 +904,6 @@ class DBService {
     password: string
   ): Promise<{ ok: boolean }> {
     const normalizedId = loginId.trim().toLowerCase();
-
-    if (this.isDemoMode) {
-      const user = mockUsers.find((u) => (u.loginId || '').toLowerCase() === normalizedId);
-      if (user) {
-        user.status = UserStatus.AGENCY;
-        (user as any).password = password;
-      }
-      return { ok: true };
-    }
 
     try {
       const { data: result, error: funcError } = await supabase.functions.invoke(
@@ -943,7 +952,7 @@ class DBService {
       status: (u.status as UserStatus) || UserStatus.CUSTOMER,
       referrerId: u.referrer_id || '',
       agencyApplicationStatus: (u.agency_application_status as AgencyApplicationStatus) || AgencyApplicationStatus.NONE,
-      membershipPlan: (u.membership_plan as MembershipPlan) || 'free',
+      membershipPlan: (u.membership_plan as MembershipPlan) || '198k',
       registrationCode: u.registration_code,
       registrationCodeUsedAt: u.registration_code_used_at,
       createdAt: u.created_at || new Date().toISOString()
@@ -957,6 +966,7 @@ class DBService {
       agencyId: c.agency_id || '',
       agencyName: c.agency_name || '',
       referrerId: c.referrer_id || '',
+      sortOrder: c.sort_order != null ? Number(c.sort_order) : 0,
       status: (c.status as CaseStatus) || CaseStatus.DRAFT,
       platform: (c.platform as PlatformType) || PlatformType.RAKUTEN,
       customerType: c.customer_type || 'corporation',
@@ -985,20 +995,24 @@ class DBService {
       staffAddressKana: c.staff_address_kana,
       phone: c.phone || '',
       email: c.email || '',
-      customerName: c.company_name || c.rep_last_name || '不明',
-      baseAmount: Number(c.base_amount || 198000),
+      customerName: [c.rep_last_name, c.rep_first_name].filter(Boolean).join(' ') || c.company_name || '不明',
+      baseAmount: c.base_amount != null ? Number(c.base_amount) : 198000,
       deposit: !!c.deposit,
       depositAmount: Number(c.deposit_amount || 30000),
       tasks: c.tasks || [],
       mallProgress: c.mall_progress || {
         rakuten: MallOpeningStatus.NOT_STARTED,
-        yahoo: MallOpeningStatus.NOT_STARTED,
-        aupay: MallOpeningStatus.NOT_STARTED
+        mercari: MallOpeningStatus.NOT_STARTED,
+        aupay: MallOpeningStatus.NOT_STARTED,
+        yahoo: MallOpeningStatus.NOT_STARTED
       },
       subline: c.subline || { status: 'none', siteType: 'subline' },
       emailJp: c.email_jp || { status: 'none', domainType: 'email_jp' },
       rakutenInfo: c.rakuten_info || { needsShipping: 'unnecessary' },
+      mercariInfo: c.mercari_info || {},
+      aupayInfo: c.aupay_info || {},
       progressComments: c.progress_comments || [],
+      mercariFreeInput: c.mercari_free_input,
       yahooFreeInput: c.yahoo_free_input,
       aupayFreeInput: c.aupay_free_input,
       createdAt: c.created_at || new Date().toISOString(),
@@ -1006,6 +1020,167 @@ class DBService {
       documents: [],
       reviews: []
     };
+  }
+
+  async createRewardBatch(month: string): Promise<RewardBatch | null> {
+    try {
+      const { data, error } = await supabase
+        .from('reward_batches')
+        .insert([{ month }])
+        .select()
+        .single();
+      if (error) throw error;
+      return { id: data.id, month: data.month, createdAt: data.created_at };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return null;
+    }
+  }
+
+  async getRewardBatches(): Promise<RewardBatch[]> {
+    try {
+      const { data, error } = await supabase
+        .from('reward_batches')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((b: any) => ({ id: b.id, month: b.month, createdAt: b.created_at }));
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return [];
+    }
+  }
+
+  async saveRewardRowsAndPayouts(
+    batchId: string,
+    rows: Omit<RewardRow, 'id' | 'batchId' | 'createdAt'>[],
+    payoutsByRowIndex: Omit<RewardPayout, 'id' | 'batchId' | 'rowId' | 'createdAt'>[][]
+  ): Promise<{ ok: boolean }> {
+    try {
+      const { data: insertedRows, error: rowsError } = await supabase
+        .from('reward_rows')
+        .insert(
+          rows.map(r => ({
+            batch_id: batchId,
+            owner_name: r.ownerName,
+            mall_type: r.mallType,
+            shop_url: r.shopUrl,
+            sales_amount: r.salesAmount,
+            reward_amount: r.rewardAmount,
+            matched_case_id: r.matchedCaseId
+          }))
+        )
+        .select();
+      if (rowsError) throw rowsError;
+
+      const payoutsToInsert = (insertedRows || []).flatMap((row: any, idx: number) =>
+        (payoutsByRowIndex[idx] || []).map(p => ({
+          batch_id: batchId,
+          row_id: row.id,
+          recipient_type: p.recipientType,
+          recipient_user_id: p.recipientUserId,
+          recipient_name: p.recipientName,
+          amount: p.amount
+        }))
+      );
+
+      if (payoutsToInsert.length > 0) {
+        const { error: payoutsError } = await supabase.from('reward_payouts').insert(payoutsToInsert);
+        if (payoutsError) throw payoutsError;
+      }
+
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
+  }
+
+  async getRewardRows(batchId: string): Promise<RewardRow[]> {
+    try {
+      const { data, error } = await supabase
+        .from('reward_rows')
+        .select('*')
+        .eq('batch_id', batchId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        batchId: r.batch_id,
+        ownerName: r.owner_name,
+        mallType: r.mall_type,
+        shopUrl: r.shop_url,
+        salesAmount: r.sales_amount != null ? Number(r.sales_amount) : undefined,
+        rewardAmount: Number(r.reward_amount),
+        matchedCaseId: r.matched_case_id,
+        createdAt: r.created_at
+      }));
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return [];
+    }
+  }
+
+  async getRewardPayouts(batchId: string): Promise<RewardPayout[]> {
+    try {
+      const { data, error } = await supabase
+        .from('reward_payouts')
+        .select('*')
+        .eq('batch_id', batchId);
+      if (error) throw error;
+      return (data || []).map((p: any) => ({
+        id: p.id,
+        batchId: p.batch_id,
+        rowId: p.row_id,
+        recipientType: p.recipient_type,
+        recipientUserId: p.recipient_user_id,
+        recipientName: p.recipient_name,
+        amount: Number(p.amount),
+        createdAt: p.created_at
+      }));
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return [];
+    }
+  }
+
+  async deleteRewardBatch(batchId: string): Promise<{ ok: boolean }> {
+    try {
+      const { error } = await supabase.from('reward_batches').delete().eq('id', batchId);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
+  }
+
+  async updateRewardBatchMonth(batchId: string, month: string): Promise<{ ok: boolean }> {
+    try {
+      const { error } = await supabase.from('reward_batches').update({ month }).eq('id', batchId);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
+  }
+
+  // 既存バッチの行・分配額をまるごと置き換える（編集保存用）。
+  // reward_rows を削除すると reward_payouts も ON DELETE CASCADE で一緒に消える。
+  async replaceRewardRowsAndPayouts(
+    batchId: string,
+    rows: Omit<RewardRow, 'id' | 'batchId' | 'createdAt'>[],
+    payoutsByRowIndex: Omit<RewardPayout, 'id' | 'batchId' | 'rowId' | 'createdAt'>[][]
+  ): Promise<{ ok: boolean }> {
+    try {
+      const { error: delError } = await supabase.from('reward_rows').delete().eq('batch_id', batchId);
+      if (delError) throw delError;
+      return await this.saveRewardRowsAndPayouts(batchId, rows, payoutsByRowIndex);
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false };
+    }
   }
 }
 

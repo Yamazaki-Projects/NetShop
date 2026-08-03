@@ -18,23 +18,26 @@ import {
   useNavigate
 } from "react-router-dom";
 
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Network, 
-  BarChart3, 
-  Users, 
-  CheckSquare, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  Network,
+  BarChart3,
+  Users,
+  CheckSquare,
   LogOut,
   Menu,
   X,
-  AlertTriangle
+  AlertTriangle,
+  UserCircle2,
+  ShieldCheck,
+  Wallet
 } from "lucide-react";
 
 import LoginPage from "./pages_spa/LoginPage";
 import RegistrationPage from "./pages_spa/RegistrationPage";
 
-import { User, UserRole } from "./types";
+import { User, UserRole, isAdminRole } from "./types";
 import { db } from "./services/dbService";
 
 const Dashboard = lazy(() => import("./pages_spa/Dashboard"));
@@ -42,8 +45,11 @@ const CaseListPage = lazy(() => import("./pages_spa/CaseListPage"));
 const CaseDetailPage = lazy(() => import("./pages_spa/CaseDetailPage"));
 const TierTreePage = lazy(() => import("./pages_spa/TierTreePage"));
 const ReferralStatsPage = lazy(() => import("./pages_spa/ReferralStatsPage"));
+const RewardImportPage = lazy(() => import("./pages_spa/RewardImportPage"));
 const AgencyListPage = lazy(() => import("./pages_spa/AgencyListPage"));
 const AgencyApprovalPage = lazy(() => import("./pages_spa/AgencyApprovalPage"));
+const ProfilePage = lazy(() => import("./pages_spa/ProfilePage"));
+const StaffManagementPage = lazy(() => import("./pages_spa/StaffManagementPage"));
 
 // --- Types & Context ---
 
@@ -162,19 +168,26 @@ const Layout = () => {
     navigate("/login");
   };
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = isAdminRole(user?.role);
 
   const menuItems = [
     { to: "/", icon: LayoutDashboard, label: "ダッシュボード" },
     { to: "/cases", icon: Briefcase, label: "案件一覧" },
     { to: "/tree", icon: Network, label: "紹介ツリー" },
     { to: "/stats", icon: BarChart3, label: "報酬統計" },
+    { to: "/profile", icon: UserCircle2, label: "プロフィール" },
   ];
 
   if (isAdmin) {
     menuItems.push(
       { to: "/agencies", icon: Users, label: "代理店管理" },
       { to: "/approvals", icon: CheckSquare, label: "承認待ち" }
+    );
+  }
+  if (user?.role === UserRole.ADMIN) {
+    menuItems.push(
+      { to: "/staff", icon: ShieldCheck, label: "スタッフ管理" },
+      { to: "/rewards", icon: Wallet, label: "月次報酬分配" }
     );
   }
 
@@ -208,7 +221,7 @@ const Layout = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 truncate">{user?.role === UserRole.ADMIN ? '管理者' : '代理店'}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.role === UserRole.ADMIN ? '管理者' : user?.role === UserRole.CO_OWNER ? '共同経営者' : user?.role === UserRole.EXECUTIVE ? '幹部' : '代理店'}</p>
             </div>
           </div>
           <button
@@ -381,8 +394,11 @@ export default function App() {
               <Route path="/cases/:id" element={<CaseDetailPage />} />
               <Route path="/tree" element={<TierTreePage />} />
               <Route path="/stats" element={<ReferralStatsPage />} />
+              <Route path="/rewards" element={<RewardImportPage />} />
               <Route path="/agencies" element={<AgencyListPage />} />
               <Route path="/approvals" element={<AgencyApprovalPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/staff" element={<StaffManagementPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

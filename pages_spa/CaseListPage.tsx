@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { CaseStatus, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User } from '../types';
+import { CaseStatus, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User, isAdminRole } from '../types';
 import { Card, Input, Button, Badge, Select, AgencyStatusBadge } from '../components/UI';
 
 const CaseListPage = () => {
@@ -11,11 +11,13 @@ const CaseListPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'mine' | 'team'>('mine');
   const [search, setSearch] = useState('');
-  
+
   const [myCases, setMyCases] = useState<Case[]>([]);
   const [teamCases, setTeamCases] = useState<Case[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // 新規登録モーダル用ステート
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -55,6 +57,12 @@ const CaseListPage = () => {
     loadData();
   }, [user]);
 
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const filteredCases = useMemo(() => {
     const cases = activeTab === 'mine' ? myCases : teamCases;
     return cases.filter(c => 
@@ -83,11 +91,32 @@ const CaseListPage = () => {
     }
   };
 
+  const canDeleteCase = isAdminRole(user?.role) || activeTab === 'mine';
+
+  const handleDeleteCase = async (e: React.MouseEvent, c: Case) => {
+    e.stopPropagation();
+    if (!user) return;
+    if (!window.confirm(`${c.customerName}（${(c.id || '').toLowerCase()}）を削除します。この操作は元に戻せません。よろしいですか？`)) return;
+    setDeletingId(c.id);
+    try {
+      const result = await db.deleteCase(c.id, user);
+      if (!result.ok) {
+        alert(result.error || '削除に失敗しました。');
+        return;
+      }
+      await loadData();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const isMobile = windowWidth < 768;
+
   return (
     <div className="animate-fade-in">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>顧客管理</h1>
-        <Button onClick={() => setShowCreateModal(true)}>+ 新規顧客登録</Button>
+      <header style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '12px' : '0', marginBottom: '40px' }}>
+        <h1 style={{ fontSize: isMobile ? '1.5rem' : '2.25rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>顧客管理</h1>
+        <Button onClick={() => setShowCreateModal(true)} style={{ width: isMobile ? '100%' : 'auto' }}>+ 新規顧客登録</Button>
       </header>
 
       <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
@@ -113,6 +142,7 @@ const CaseListPage = () => {
                   <th className="align-center">楽天市場</th>
                   <th className="align-center">代理店状況</th>
                   <th className="align-right">最終更新</th>
+                  {canDeleteCase && <th style={{ width: '48px' }}></th>}
                 </tr>
               </thead>
               <tbody>
@@ -131,6 +161,18 @@ const CaseListPage = () => {
                     <td className="align-right" style={{ color: 'var(--text-sub)', fontWeight: 700 }}>
                       {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : '---'}
                     </td>
+                    {canDeleteCase && (
+                      <td className="align-center">
+                        <button
+                          onClick={(e) => handleDeleteCase(e, c)}
+                          disabled={deletingId === c.id}
+                          title="この顧客を削除"
+                          style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem', padding: '4px' }}
+                        >
+                          {deletingId === c.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-trash"></i>}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -141,8 +183,8 @@ const CaseListPage = () => {
 
       {/* 新規登録モーダル */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-          <Card style={{ width: '100%', maxWidth: '500px', padding: '40px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }} title="新規顧客登録">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <Card style={{ width: '100%', maxWidth: '500px', margin: isMobile ? '0' : '16px', borderRadius: isMobile ? '24px 24px 0 0' : '24px', maxHeight: '90vh', overflowY: 'auto', padding: '40px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }} title="新規顧客登録">
             <form onSubmit={handleCreateCase}>
               <Select 
                 label="顧客区分" 
@@ -160,19 +202,19 @@ const CaseListPage = () => {
                 onChange={e => setNewCaseForm({...newCaseForm, companyName: e.target.value})} 
               />
               
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <Input 
-                  label="代表者 姓" 
-                  required 
-                  value={newCaseForm.repLastName} 
-                  onChange={e => setNewCaseForm({...newCaseForm, repLastName: e.target.value})} 
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px' }}>
+                <Input
+                  label="代表者 姓"
+                  required
+                  value={newCaseForm.repLastName}
+                  onChange={e => setNewCaseForm({...newCaseForm, repLastName: e.target.value})}
                   style={{ flex: 1 }}
                 />
-                <Input 
-                  label="代表者 名" 
-                  required 
-                  value={newCaseForm.repFirstName} 
-                  onChange={e => setNewCaseForm({...newCaseForm, repFirstName: e.target.value})} 
+                <Input
+                  label="代表者 名"
+                  required
+                  value={newCaseForm.repFirstName}
+                  onChange={e => setNewCaseForm({...newCaseForm, repFirstName: e.target.value})}
                   style={{ flex: 1 }}
                 />
               </div>

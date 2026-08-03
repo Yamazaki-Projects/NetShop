@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { CaseStatus, UserStatus, UserRole, Case, User } from '../types';
+import { CaseStatus, UserStatus, UserRole, Case, User, isAdminRole } from '../types';
 import { Card, Badge } from '../components/UI';
 
 const StatCard = ({
@@ -63,6 +63,7 @@ const Dashboard = () => {
   const [allCases, setAllCases] = useState<Case[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [approvedCount, setApprovedCount] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   useEffect(() => {
     if (!user) {
@@ -103,9 +104,16 @@ const Dashboard = () => {
     };
   }, [user]);
 
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // ✅ Hooksは「必ず毎回」同じ順序で呼ばれる位置に置く（早期returnより前）
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = isAdminRole(user?.role);
+  const isMobile = windowWidth < 768;
 
   // 20%初期報酬の合計 (承認案件数 × 39,600円 の近似)
   const estimatedRevenue = useMemo(() => {
@@ -191,7 +199,7 @@ const Dashboard = () => {
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '48px', textAlign: 'left' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>
+        <h1 style={{ fontSize: isMobile ? '1.5rem' : '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>
           Welcome back, {user.name} <span style={{ color: 'var(--accent)' }}>👋</span>
         </h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: '1.1rem', marginTop: '8px' }}>
@@ -206,7 +214,7 @@ const Dashboard = () => {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           gap: '28px',
           marginBottom: '48px'
         }}

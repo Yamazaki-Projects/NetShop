@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment, InitialCommission } from '../types';
+import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment, InitialCommission, isAdminRole } from '../types';
 import { Card, Button, Badge, Input, Select, Textarea } from '../components/UI';
 import InfoRow from '../components/InfoRow';
 
@@ -32,6 +32,8 @@ const CaseDetailPage = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [commission, setCommission] = useState<InitialCommission | null>(null);
   const [commissionUpdating, setCommissionUpdating] = useState(false);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [amountInput, setAmountInput] = useState('');
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -94,7 +96,7 @@ const CaseDetailPage = () => {
 
   if (!caseData || !user) return <div style={{ padding: '64px', textAlign: 'center' }}>データが見つかりませんでした。</div>;
 
-  const isAdmin = user.role === UserRole.ADMIN;
+  const isAdmin = isAdminRole(user.role);
 
   const handleApplyForAgency = async () => {
     setApplicationLoading(true);
@@ -108,6 +110,23 @@ const CaseDetailPage = () => {
       }
     } catch (e: any) {
       alert('システムエラーが発生しました: ' + e.message);
+    } finally {
+      setApplicationLoading(false);
+    }
+  };
+
+  const handleCancelAgency = async () => {
+    if (!customerUser || !window.confirm('代理店昇格申請を取り消しますか？')) return;
+    setApplicationLoading(true);
+    try {
+      const res = await db.cancelAgencyApplication(customerUser.loginId);
+      if (res.ok) {
+        await loadData();
+      } else {
+        alert('取り消しに失敗しました。');
+      }
+    } catch (e: any) {
+      alert('エラー: ' + e.message);
     } finally {
       setApplicationLoading(false);
     }
@@ -129,10 +148,17 @@ const CaseDetailPage = () => {
 
   const saveChanges = async () => {
     if (caseData && editedCase) {
-      const result = await db.updateCase(caseData.id, editedCase, user);
-      if (result) {
-        setIsEditing(false);
-        await loadData();
+      try {
+        const result = await db.updateCase(caseData.id, editedCase, user);
+        if (result) {
+          setIsEditing(false);
+          await loadData();
+        } else {
+          alert('保存に失敗しました。データが見つかりませんでした。');
+        }
+      } catch (err: any) {
+        alert('保存エラー: ' + (err.message || '不明なエラー'));
+        console.error('saveChanges error:', err);
       }
     }
   };
@@ -159,13 +185,24 @@ const CaseDetailPage = () => {
 
   const mallStatusOptions = Object.values(MallOpeningStatus).map(s => ({ label: s, value: s }));
 
-  const isMobile = windowWidth < 1100;
+  const isMobile = windowWidth < 768;
 
   const handleCommissionStatusToggle = async () => {
     if (!commission) return;
     setCommissionUpdating(true);
     const newStatus = commission.status === 'pending' ? 'paid' : 'pending';
     await db.updateInitialCommissionStatus(commission.id, newStatus);
+    await loadData();
+    setCommissionUpdating(false);
+  };
+
+  const handleAmountSave = async () => {
+    if (!commission) return;
+    const parsed = parseInt(amountInput.replace(/,/g, ''), 10);
+    if (isNaN(parsed) || parsed < 0) return;
+    setCommissionUpdating(true);
+    await db.updateInitialCommissionAmount(commission.id, parsed);
+    setEditingAmount(false);
     await loadData();
     setCommissionUpdating(false);
   };
@@ -180,7 +217,7 @@ const CaseDetailPage = () => {
             <span style={{ color: 'var(--text-sub)', fontWeight: 800, fontSize: '0.85rem' }}>顧客ID: {(caseData.id || '').toLowerCase()}</span>
           </div>
           <h1 style={{ fontSize: isMobile ? '1.8rem' : '2.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.03em' }}>
-            {caseData.companyName || `${caseData.repLastName} ${caseData.repFirstName}`} <span style={{fontSize: '1.2rem', color: 'var(--text-sub)'}}>様</span>
+            {[caseData.repLastName, caseData.repFirstName].filter(Boolean).join(' ') || caseData.companyName} <span style={{fontSize: '1.2rem', color: 'var(--text-sub)'}}>様</span>
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '12px', width: isMobile ? '100%' : 'auto' }}>
@@ -207,13 +244,21 @@ const CaseDetailPage = () => {
           {activeTab === 'opening' && (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
               <Card title="050番号情報">
-                <InfoRow label="050番号" value={isEditing ? editedCase.subline?.number050 : caseData.subline?.number050} field="number050" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
-                <InfoRow label="取得サイト" value={isEditing ? editedCase.subline?.siteType : caseData.subline?.siteType} field="siteType" group="subline" type="select" options={[{label: 'subline', value: 'subline'}, {label: '他のサイト', value: 'other'}]} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
-                { (isEditing ? editedCase.subline?.siteType : caseData.subline?.siteType) === 'other' && (
-                  <InfoRow label="URL" value={isEditing ? editedCase.subline?.otherUrl : caseData.subline?.otherUrl} field="otherUrl" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="電話タイプ" value={isEditing ? editedCase.subline?.phoneType : caseData.subline?.phoneType} field="phoneType" group="subline" type="select" options={[{label: '050番号', value: '050'}, {label: '固定電話', value: 'landline'}]} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                { (isEditing ? editedCase.subline?.phoneType : caseData.subline?.phoneType) !== 'landline' && (
+                  <>
+                    <InfoRow label="050番号" value={isEditing ? editedCase.subline?.number050 : caseData.subline?.number050} field="number050" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                    <InfoRow label="取得サイト" value={isEditing ? editedCase.subline?.siteType : caseData.subline?.siteType} field="siteType" group="subline" type="select" options={[{label: 'subline', value: 'subline'}, {label: '他のサイト', value: 'other'}]} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                    { (isEditing ? editedCase.subline?.siteType : caseData.subline?.siteType) === 'other' && (
+                      <InfoRow label="URL" value={isEditing ? editedCase.subline?.otherUrl : caseData.subline?.otherUrl} field="otherUrl" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                    )}
+                    <InfoRow label="ID" value={isEditing ? editedCase.subline?.loginId : caseData.subline?.loginId} field="loginId" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                    <InfoRow label="パスワード" value={isEditing ? editedCase.subline?.password : caseData.subline?.password} field="password" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                  </>
                 )}
-                <InfoRow label="ID" value={isEditing ? editedCase.subline?.loginId : caseData.subline?.loginId} field="loginId" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
-                <InfoRow label="パスワード" value={isEditing ? editedCase.subline?.password : caseData.subline?.password} field="password" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                { (isEditing ? editedCase.subline?.phoneType : caseData.subline?.phoneType) === 'landline' && (
+                  <InfoRow label="電話番号" value={isEditing ? editedCase.subline?.number050 : caseData.subline?.number050} field="number050" group="subline" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                )}
               </Card>
 
               <Card title="e-mail.jp 情報">
@@ -238,41 +283,27 @@ const CaseDetailPage = () => {
                 <InfoRow label="billpay パスワード" value={isEditing ? editedCase.rakutenInfo?.billpayPass : caseData.rakutenInfo?.billpayPass} field="billpayPass" group="rakutenInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
               </Card>
 
+              <Card title="メルカリショップス 開設情報">
+                <InfoRow label="開設状況" value={isEditing ? editedCase.mallProgress?.mercari : caseData.mallProgress?.mercari} field="mercari" group="mallProgress" type="select" options={mallStatusOptions} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="メールアドレス" value={isEditing ? editedCase.mercariInfo?.email : caseData.mercariInfo?.email} field="email" group="mercariInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="パスワード" value={isEditing ? editedCase.mercariInfo?.password : caseData.mercariInfo?.password} field="password" group="mercariInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="電話番号" value={isEditing ? editedCase.mercariInfo?.phone : caseData.mercariInfo?.phone} field="phone" group="mercariInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+              </Card>
+
+              <Card title="au PAY マーケット 開設情報">
+                <InfoRow label="開設状況" value={isEditing ? editedCase.mallProgress?.aupay : caseData.mallProgress?.aupay} field="aupay" group="mallProgress" type="select" options={mallStatusOptions} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="メールアドレス" value={isEditing ? editedCase.aupayInfo?.email : caseData.aupayInfo?.email} field="email" group="aupayInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="Wow! manager ID" value={isEditing ? editedCase.aupayInfo?.wowManagerId : caseData.aupayInfo?.wowManagerId} field="wowManagerId" group="aupayInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="Wow! manager パスワード" value={isEditing ? editedCase.aupayInfo?.wowManagerPass : caseData.aupayInfo?.wowManagerPass} field="wowManagerPass" group="aupayInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="au PAY マーケット Salon ID" value={isEditing ? editedCase.aupayInfo?.salonId : caseData.aupayInfo?.salonId} field="salonId" group="aupayInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+                <InfoRow label="au PAY マーケット Salon パスワード" value={isEditing ? editedCase.aupayInfo?.salonPass : caseData.aupayInfo?.salonPass} field="salonPass" group="aupayInfo" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
+              </Card>
+
               <Card title="Yahoo!ショッピング 開設情報">
                 <InfoRow label="開設状況" value={isEditing ? editedCase.mallProgress?.yahoo : caseData.mallProgress?.yahoo} field="yahoo" group="mallProgress" type="select" options={mallStatusOptions} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
                 <InfoRow label="フリー入力" value={isEditing ? editedCase.yahooFreeInput : caseData.yahooFreeInput} field="yahooFreeInput" type="textarea" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
               </Card>
 
-              <Card title="au PAY マーケット 開設情報">
-                <InfoRow label="開設状況" value={isEditing ? editedCase.mallProgress?.aupay : caseData.mallProgress?.aupay} field="aupay" group="mallProgress" type="select" options={mallStatusOptions} isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
-                <InfoRow label="フリー入力" value={isEditing ? editedCase.aupayFreeInput : caseData.aupayFreeInput} field="aupayFreeInput" type="textarea" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
-              </Card>
-
-              <Card title="進捗コメント">
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
-                  <Input 
-                    placeholder="進捗コメントを入力..." 
-                    value={newComment} 
-                    onChange={e => setNewComment(e.target.value)} 
-                    containerStyle={{ marginBottom: 0, flex: 1 }}
-                  />
-                  <Button onClick={handleAddComment} disabled={!newComment.trim()} style={{ height: '50px', flexShrink: 0 }}>追加</Button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {caseData.progressComments?.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-sub)', padding: '20px' }}>コメントはありません。</div>
-                  ) : (
-                    [...(caseData.progressComments || [])].reverse().map(c => (
-                      <div key={c.id} style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800 }}>{new Date(c.createdAt).toLocaleString()}</span>
-                        </div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-wrap' }}>{c.text}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Card>
             </div>
           )}
 
@@ -374,6 +405,14 @@ const CaseDetailPage = () => {
                   <i className="fa-solid fa-clock"></i> 昇格申請中
                 </Badge>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginTop: '12px', fontWeight: 600 }}>管理者の承認をお待ちください。</p>
+                <Button
+                  onClick={handleCancelAgency}
+                  variant="ghost"
+                  disabled={applicationLoading}
+                  style={{ width: '100%', marginTop: '12px', fontSize: '0.8rem', border: '1px solid var(--border)', color: '#ef4444' }}
+                >
+                  {applicationLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '申請を取り消す'}
+                </Button>
               </div>
             ) : isUsed ? (
               <div style={{ textAlign: 'center' }}>
@@ -394,49 +433,115 @@ const CaseDetailPage = () => {
             )}
           </Card>
 
-          {isAdmin && (
+          {isAdmin && commission && (
             <Card title="初期報酬 (管理者)" style={{ border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.02)' }}>
-              {commission ? (
-                <>
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>受取代理店</div>
-                    <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{commission.recipientName}</div>
-                  </div>
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>報酬額 (20%)</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)' }}>¥{commission.amount.toLocaleString()}</div>
-                  </div>
-                  <div style={{ marginBottom: '20px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '6px' }}>支払い状況</div>
-                    <span style={{
-                      fontSize: '0.8rem', fontWeight: 800, padding: '4px 12px', borderRadius: '8px',
-                      background: commission.status === 'paid' ? '#dcfce7' : '#fef3c7',
-                      color: commission.status === 'paid' ? '#16a34a' : '#b45309'
-                    }}>
-                      {commission.status === 'paid' ? `支払済 (${commission.paidAt ? new Date(commission.paidAt).toLocaleDateString('ja-JP') : ''})` : '未払い'}
-                    </span>
-                  </div>
-                  <Button
-                    onClick={handleCommissionStatusToggle}
-                    disabled={commissionUpdating}
-                    variant={commission.status === 'paid' ? 'ghost' : undefined}
-                    style={{ width: '100%', fontSize: '0.8rem' }}
-                  >
-                    {commissionUpdating
-                      ? <i className="fa-solid fa-spinner fa-spin"></i>
-                      : commission.status === 'paid' ? '未払いに戻す' : '支払済にする'}
-                  </Button>
-                </>
-              ) : (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)', fontWeight: 700, padding: '8px 0' }}>
-                  この案件の初期報酬レコードがありません。<br />
-                  <span style={{ fontSize: '0.75rem' }}>（案件承認時に自動生成されます）</span>
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '4px' }}>受取代理店</div>
+                <div style={{ fontWeight: 800, color: 'var(--text-main)' }}>{commission.recipientName}</div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)' }}>報酬額</span>
+                  {!editingAmount && (
+                    <button
+                      onClick={() => { setEditingAmount(true); setAmountInput(String(commission.amount)); }}
+                      style={{ fontSize: '0.7rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}
+                    >
+                      <i className="fa-solid fa-pen"></i> 変更
+                    </button>
+                  )}
                 </div>
-              )}
+                {editingAmount ? (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: 'var(--text-sub)' }}>¥</span>
+                      <input
+                        type="number"
+                        value={amountInput}
+                        onChange={e => setAmountInput(e.target.value)}
+                        style={{ width: '100%', padding: '10px 12px 10px 28px', border: '2px solid var(--primary)', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 800, outline: 'none', background: 'var(--bg-main)', color: 'var(--text-main)' }}
+                        autoFocus
+                      />
+                    </div>
+                    <Button onClick={handleAmountSave} disabled={commissionUpdating} style={{ padding: '10px 16px', fontSize: '0.8rem' }}>保存</Button>
+                    <Button variant="ghost" onClick={() => setEditingAmount(false)} style={{ padding: '10px 12px', fontSize: '0.8rem' }}>✕</Button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                    ¥{commission.amount.toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-sub)', marginBottom: '6px' }}>支払い状況</div>
+                <span style={{
+                  fontSize: '0.8rem', fontWeight: 800, padding: '4px 12px', borderRadius: '8px',
+                  background: commission.status === 'paid' ? '#dcfce7' : '#fef3c7',
+                  color: commission.status === 'paid' ? '#16a34a' : '#b45309'
+                }}>
+                  {commission.status === 'paid' ? `支払済 (${commission.paidAt ? new Date(commission.paidAt).toLocaleDateString('ja-JP') : ''})` : '未払い'}
+                </span>
+              </div>
+
+              <Button
+                onClick={handleCommissionStatusToggle}
+                disabled={commissionUpdating}
+                variant={commission.status === 'paid' ? 'ghost' : undefined}
+                style={{ width: '100%', fontSize: '0.8rem' }}
+              >
+                {commissionUpdating
+                  ? <i className="fa-solid fa-spinner fa-spin"></i>
+                  : commission.status === 'paid' ? '未払いに戻す' : '支払済にする'}
+              </Button>
             </Card>
           )}
+
+          <Card title="進捗コメント">
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
+              <Input
+                placeholder="進捗コメントを入力..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                containerStyle={{ marginBottom: 0, flex: 1 }}
+              />
+              <Button onClick={handleAddComment} disabled={!newComment.trim()} style={{ height: '50px', flexShrink: 0 }}>追加</Button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {caseData.progressComments?.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-sub)', padding: '20px' }}>コメントはありません。</div>
+              ) : (
+                [...(caseData.progressComments || [])].reverse().map(c => (
+                  <div key={c.id} style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800 }}>{new Date(c.createdAt).toLocaleString()}</span>
+                    </div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-wrap' }}>{c.text}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
         </div>
       </div>
+
+      {isEditing && (
+        <div style={{
+          position: 'sticky',
+          bottom: 0,
+          marginTop: '32px',
+          padding: '16px 0',
+          background: 'var(--bg-main)',
+          borderTop: '2px solid var(--border)',
+          display: 'flex',
+          gap: '12px',
+          zIndex: 100,
+        }}>
+          <Button onClick={() => setIsEditing(false)} variant="ghost" style={{ flex: 1 }}>キャンセル</Button>
+          <Button onClick={saveChanges} style={{ flex: 1 }}>保存</Button>
+        </div>
+      )}
     </div>
   );
 };

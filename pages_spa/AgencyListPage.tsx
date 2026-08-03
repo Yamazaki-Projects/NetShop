@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { User, UserRole, UserStatus, MembershipPlan } from '../types';
+import { User, UserRole, MembershipPlan, isAdminRole } from '../types';
 import { Card, Button, Badge } from '../components/UI';
 
 const PLAN_LABELS: Record<MembershipPlan, string> = {
@@ -18,7 +18,7 @@ const PLAN_COLORS: Record<MembershipPlan, string> = {
 };
 
 const PlanBadge = ({ plan }: { plan?: MembershipPlan }) => {
-  const p = plan || 'free';
+  const p = plan || '198k';
   return (
     <Badge color={PLAN_COLORS[p]} style={{ fontSize: '0.75rem', padding: '3px 10px', fontWeight: 800 }}>
       {PLAN_LABELS[p]}
@@ -31,27 +31,34 @@ const AgencyListPage = () => {
   const [agencies, setAgencies] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [editPlan, setEditPlan] = useState<MembershipPlan>('free');
+  const [editPlan, setEditPlan] = useState<MembershipPlan>('198k');
   const [saving, setSaving] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const loadAgencies = async () => {
     setLoading(true);
     const allUsers = await db.getUsers();
-    setAgencies(allUsers.filter(u => u.status === UserStatus.AGENCY && u.role !== UserRole.ADMIN));
+    setAgencies(allUsers.filter(u => !isAdminRole(u.role)));
     setLoading(false);
   };
 
   useEffect(() => {
-    if (currentUser?.role === UserRole.ADMIN) loadAgencies();
+    if (isAdminRole(currentUser?.role)) loadAgencies();
   }, [currentUser]);
 
-  if (currentUser?.role !== UserRole.ADMIN) {
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  if (!isAdminRole(currentUser?.role)) {
     return <div style={{ padding: '48px', textAlign: 'center' }}>このページを表示する権限がありません。</div>;
   }
 
   const handleEditClick = (agency: User) => {
     setEditingUserId(agency.id);
-    setEditPlan(agency.membershipPlan || 'free');
+    setEditPlan(agency.membershipPlan || '198k');
   };
 
   const handleSave = async () => {
@@ -63,10 +70,12 @@ const AgencyListPage = () => {
     await loadAgencies();
   };
 
+  const isMobile = windowWidth < 768;
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '40px', textAlign: 'left' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>代理店管理</h1>
+        <h1 style={{ fontSize: isMobile ? '1.5rem' : '2.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>代理店管理</h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600 }}>代理店パートナーのメンバーシッププランを管理します。</p>
       </header>
 
@@ -79,15 +88,15 @@ const AgencyListPage = () => {
               <thead>
                 <tr>
                   <th className="align-left">代理店名 / ID</th>
-                  <th className="align-left">メールアドレス</th>
-                  <th className="align-center">メンバーシッププラン</th>
-                  <th className="align-center">報酬率（直/2段）</th>
+                  {!isMobile && <th className="align-left">メールアドレス</th>}
+                  <th className="align-center">プラン</th>
+                  {!isMobile && <th className="align-center">報酬率（直/2段）</th>}
                   <th className="align-right">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {agencies.map(agency => {
-                  const plan = agency.membershipPlan || 'free';
+                  const plan = agency.membershipPlan || '198k';
                   const directRate = plan === '198k' ? '2%' : '1%';
                   const secondRate = plan === '198k' ? '1%' : 'なし';
                   const shopRate  = plan === '198k' ? '4%' : 'なし';
@@ -99,17 +108,19 @@ const AgencyListPage = () => {
                           {(agency.loginId || '').toLowerCase()}
                         </div>
                       </td>
-                      <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>
+                      {!isMobile && <td className="align-left" style={{ fontSize: '0.85rem' }}>{agency.email}</td>}
                       <td className="align-center">
                         <PlanBadge plan={plan} />
                       </td>
-                      <td className="align-center">
-                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.8 }}>
-                          <span style={{ color: 'var(--primary)' }}>自店: {shopRate}</span>
-                          {' / '}直: {directRate}
-                          {' / '}2段: {secondRate}
-                        </div>
-                      </td>
+                      {!isMobile && (
+                        <td className="align-center">
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.8 }}>
+                            <span style={{ color: 'var(--primary)' }}>自店: {shopRate}</span>
+                            {' / '}直: {directRate}
+                            {' / '}2段: {secondRate}
+                          </div>
+                        </td>
+                      )}
                       <td className="align-right">
                         <Button
                           variant="ghost"
@@ -137,7 +148,7 @@ const AgencyListPage = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-              {(['free', '30k', '198k'] as MembershipPlan[]).map(plan => {
+              {(['198k', '30k', '198k'] as MembershipPlan[]).map(plan => {
                 const directRate = plan === '198k' ? '2%' : '1%';
                 const secondRate = plan === '198k' ? '1%' : 'なし';
                 const shopRate   = plan === '198k' ? '4%' : 'なし';

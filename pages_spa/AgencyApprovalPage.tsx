@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { User, UserRole, UserStatus, AgencyApplicationStatus } from '../types';
+import { User, UserRole, UserStatus, AgencyApplicationStatus, isAdminRole } from '../types';
 import { Card, Button, Badge } from '../components/UI';
 
 const AgencyApprovalPage = () => {
@@ -12,6 +12,7 @@ const AgencyApprovalPage = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved'>('pending');
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const loadData = async () => {
     setLoading(true);
@@ -22,10 +23,16 @@ const AgencyApprovalPage = () => {
   };
 
   useEffect(() => {
-    if (currentUser?.role === UserRole.ADMIN) {
+    if (isAdminRole(currentUser?.role)) {
       loadData();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleApprove = async (customerId: string) => {
     if (!window.confirm(`顧客ID: ${customerId} の代理店昇格を承認しますか？承認と同時に登録コードが発行されます。`)) return;
@@ -40,20 +47,22 @@ const AgencyApprovalPage = () => {
     setActionLoading(null);
   };
 
-  if (currentUser?.role !== UserRole.ADMIN) return null;
+  if (!isAdminRole(currentUser?.role)) return null;
+
+  const isMobile = windowWidth < 768;
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }} className="animate-fade-in">
       <header style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-main)' }}>代理店昇格 承認管理</h1>
+        <h1 style={{ fontSize: isMobile ? '1.4rem' : '2.25rem', fontWeight: 900, color: 'var(--text-main)' }}>代理店昇格 承認管理</h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>パートナー各社からの昇格申請の確認と、登録コードの発行状況を管理します。</p>
       </header>
 
       <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--border)', marginBottom: '32px' }}>
-        <button onClick={() => setActiveTab('pending')} style={{ padding: '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, color: activeTab === 'pending' ? 'var(--primary)' : 'var(--text-sub)', borderBottom: activeTab === 'pending' ? '4px solid var(--primary)' : '4px solid transparent' }}>
+        <button onClick={() => setActiveTab('pending')} style={{ padding: isMobile ? '10px 14px' : '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, fontSize: isMobile ? '0.82rem' : '1rem', color: activeTab === 'pending' ? 'var(--primary)' : 'var(--text-sub)', borderBottom: activeTab === 'pending' ? '4px solid var(--primary)' : '4px solid transparent' }}>
           未処理の申請 ({pendingUsers.length})
         </button>
-        <button onClick={() => setActiveTab('approved')} style={{ padding: '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, color: activeTab === 'approved' ? 'var(--accent)' : 'var(--text-sub)', borderBottom: activeTab === 'approved' ? '4px solid var(--accent)' : '4px solid transparent' }}>
+        <button onClick={() => setActiveTab('approved')} style={{ padding: isMobile ? '10px 14px' : '16px 28px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, fontSize: isMobile ? '0.82rem' : '1rem', color: activeTab === 'approved' ? 'var(--accent)' : 'var(--text-sub)', borderBottom: activeTab === 'approved' ? '4px solid var(--accent)' : '4px solid transparent' }}>
           承認済み/未登録 ({approvedUsers.length})
         </button>
       </div>

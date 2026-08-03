@@ -69,7 +69,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.OPENED, yahoo: MallOpeningStatus.OPENED, aupay: MallOpeningStatus.OPENED },
+    mallProgress: { rakuten: MallOpeningStatus.OPENED, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.NOT_STARTED, yahoo: MallOpeningStatus.OPENED },
     subline: { status: 'active', siteType: 'subline' },
     emailJp: { status: 'active', domainType: 'email_jp' },
     deposit: false,
@@ -102,7 +102,7 @@ export const mockCases: Case[] = [
     subline: { status: 'active', siteType: 'subline' },
     emailJp: { status: 'active', domainType: 'email_jp' },
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.OPENED, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+    mallProgress: { rakuten: MallOpeningStatus.OPENED, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING },
     deposit: false,
     depositAmount: 30000,
     progressComments: []
@@ -131,7 +131,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+    mallProgress: { rakuten: MallOpeningStatus.APPLYING, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING },
     subline: { status: 'none', siteType: 'subline' },
     emailJp: { status: 'none', domainType: 'email_jp' },
     deposit: false,
@@ -164,7 +164,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.OPENED, yahoo: MallOpeningStatus.OPENED, aupay: MallOpeningStatus.OPENED },
+    mallProgress: { rakuten: MallOpeningStatus.OPENED, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.NOT_STARTED, yahoo: MallOpeningStatus.OPENED },
     subline: { status: 'active', siteType: 'subline' },
     emailJp: { status: 'active', domainType: 'email_jp' },
     deposit: false,
@@ -195,7 +195,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.OPENED, yahoo: MallOpeningStatus.OPENED, aupay: MallOpeningStatus.OPENED },
+    mallProgress: { rakuten: MallOpeningStatus.OPENED, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.NOT_STARTED, yahoo: MallOpeningStatus.OPENED },
     subline: { status: 'active', siteType: 'subline' },
     emailJp: { status: 'active', domainType: 'email_jp' },
     deposit: false,
@@ -226,7 +226,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+    mallProgress: { rakuten: MallOpeningStatus.APPLYING, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING },
     subline: { status: 'pending', siteType: 'subline' },
     emailJp: { status: 'pending', domainType: 'email_jp' },
     deposit: false,
@@ -259,7 +259,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.OPENED, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+    mallProgress: { rakuten: MallOpeningStatus.OPENED, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING },
     subline: { status: 'active', siteType: 'subline' },
     emailJp: { status: 'active', domainType: 'email_jp' },
     deposit: false,
@@ -292,7 +292,7 @@ export const mockCases: Case[] = [
     documents: [],
     reviews: [],
     rakutenInfo: { needsShipping: 'unnecessary' },
-    mallProgress: { rakuten: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING, aupay: MallOpeningStatus.APPLYING },
+    mallProgress: { rakuten: MallOpeningStatus.APPLYING, mercari: MallOpeningStatus.NOT_STARTED, aupay: MallOpeningStatus.APPLYING, yahoo: MallOpeningStatus.APPLYING },
     subline: { status: 'none', siteType: 'subline' },
     emailJp: { status: 'none', domainType: 'email_jp' },
     deposit: false,
@@ -314,7 +314,7 @@ export const mockAuditLogs: AuditLog[] = [
   }
 ];
 
-// 初期報酬 (20%ショット): 198kプランの代理店が紹介した案件が承認された時に発生
+// 初期報酬 (20%ショット): 案件登録時に自動生成、金額は手動変更可能
 export const mockInitialCommissions: InitialCommission[] = [
   {
     id: 'ic1',
@@ -325,7 +325,7 @@ export const mockInitialCommissions: InitialCommission[] = [
     amount: 39600,
     status: 'paid',
     paidAt: '2023-04-30T00:00:00Z',
-    createdAt: '2023-03-10T10:00:00Z'
+    createdAt: '2023-03-01T10:00:00Z'
   },
   {
     id: 'ic2',
@@ -336,16 +336,68 @@ export const mockInitialCommissions: InitialCommission[] = [
     amount: 39600,
     status: 'paid',
     paidAt: '2023-06-30T00:00:00Z',
-    createdAt: '2023-05-10T10:00:00Z'
+    createdAt: '2023-05-01T10:00:00Z'
   },
   {
     id: 'ic3',
+    caseId: 'CASE-DEMO-SUZUKI',
+    caseCompanyName: '鈴木 サービス',
+    recipientUserId: 'u6',
+    recipientName: 'デモ代理店',
+    amount: 39600,
+    status: 'pending',
+    createdAt: '2024-04-01T11:00:00Z'
+  },
+  {
+    id: 'ic4',
     caseId: 'CASE-TANAKA-KOBAYASHI',
     caseCompanyName: '小林 フード',
     recipientUserId: 'u2',
     recipientName: '田中 代理店',
     amount: 39600,
     status: 'pending',
-    createdAt: '2024-03-05T10:00:00Z'
+    createdAt: '2024-03-01T10:00:00Z'
+  },
+  {
+    id: 'ic5',
+    caseId: 'CASE-ITO-SATO',
+    caseCompanyName: '佐藤 商事',
+    recipientUserId: 'u5',
+    recipientName: '伊藤 代理店',
+    amount: 39600,
+    status: 'pending',
+    createdAt: '2024-06-01T10:00:00Z'
+  },
+  {
+    id: 'ic6',
+    caseId: 'CASE-ADMIN-DEMO',
+    caseCompanyName: 'デモ代理店',
+    recipientUserId: 'u1',
+    recipientName: 'システム管理者',
+    amount: 39600,
+    status: 'paid',
+    paidAt: '2023-03-01T00:00:00Z',
+    createdAt: '2023-02-01T10:00:00Z'
+  },
+  {
+    id: 'ic7',
+    caseId: 'CASE-ADMIN-TAKAHASHI',
+    caseCompanyName: '高橋 商店',
+    recipientUserId: 'u1',
+    recipientName: 'システム管理者',
+    amount: 39600,
+    status: 'paid',
+    paidAt: '2024-02-01T00:00:00Z',
+    createdAt: '2024-01-10T10:00:00Z'
+  },
+  {
+    id: 'ic8',
+    caseId: 'CASE-ADMIN-WATANABE',
+    caseCompanyName: '渡辺 製作所',
+    recipientUserId: 'u1',
+    recipientName: 'システム管理者',
+    amount: 39600,
+    status: 'pending',
+    createdAt: '2024-05-15T10:00:00Z'
   }
 ];

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../App';
 import { db } from '../services/dbService';
-import { Case, User, InitialCommission, UserRole } from '../types';
+import { Case, User, InitialCommission, UserRole, isAdminRole } from '../types';
 import { Card, AgencyStatusBadge } from '../components/UI';
 
 const ReferralStatsPage = () => {
@@ -12,8 +12,15 @@ const ReferralStatsPage = () => {
   const [allCases, setAllCases] = useState<Case[]>([]);
   const [commissions, setCommissions] = useState<InitialCommission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = isAdminRole(user?.role);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -89,7 +96,7 @@ const ReferralStatsPage = () => {
       const directRate = plan === '198k' ? 2 : 1;
       result.push({
         caseId: c.id,
-        companyName: c.companyName || c.id,
+        companyName: [c.repLastName, c.repFirstName].filter(Boolean).join(' ') || c.companyName || c.id,
         level: 1,
         rate: directRate,
         color: plan === '198k' ? '#10b981' : '#0ea5e9'
@@ -137,10 +144,12 @@ const ReferralStatsPage = () => {
     );
   }
 
+  const isMobile = windowWidth < 768;
+
   return (
     <div className="animate-fade-in">
       <header style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.04em' }}>
+        <h1 style={{ fontSize: isMobile ? '1.5rem' : '2.5rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.04em' }}>
           報酬統計 <span style={{ color: 'var(--primary)' }}>.</span>
         </h1>
         <p style={{ color: 'var(--text-sub)', fontWeight: 600, marginTop: '8px' }}>
@@ -228,7 +237,7 @@ const ReferralStatsPage = () => {
         </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '24px' }}>
         {/* 月次売上報酬ツリー */}
         {!isAdmin && (
           <Card title="月次売上報酬の対象ショップ">
