@@ -87,9 +87,11 @@ class DBService {
         .ilike('login_id', normalizedLoginId)
         .maybeSingle();
 
+      // 認証前は users テーブルを読めない（匿名読み取りをRLSで禁止しているため）。
+      // ここは「login_id と異なるメールアドレスで登録されている場合」の救済用なので、
+      // 引けなくてもログイン自体は loginId@net-shop.com で継続できる。
       if (profileError) {
-        console.error("[DBService] Profile fetch error during login:", profileError);
-        throw profileError;
+        console.warn("[DBService] Profile lookup skipped during login:", profileError.message);
       }
 
       const emailsToTry = new Set<string>();
@@ -874,24 +876,20 @@ class DBService {
     }
   }
 
+  // 登録前のチェックは未ログイン状態で行われる。以前は users テーブルを直接引いて
+  // いたが、それを許すと登録コードを含む全ユーザー情報が匿名で読めてしまうため、
+  // 判定結果(ok/reason)だけを返す SECURITY DEFINER 関数に問い合わせる。
   async checkRegistrationEligibility(
     loginId: string,
     registrationCode: string
-  ): Promise<{ ok: boolean; reason?: string; email?: string }> {
+  ): Promise<{ ok: boolean; reason?: string }> {
     try {
-      const { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .ilike('login_id', loginId.trim())
-        .maybeSingle();
-
-      if (!user) return { ok: false, reason: 'not_found' };
-      if (user.status === UserStatus.AGENCY) return { ok: false, reason: 'already_registered' };
-      if (user.agency_application_status !== AgencyApplicationStatus.APPROVED) return { ok: false, reason: 'not_approved' };
-      if (user.registration_code !== registrationCode) return { ok: false, reason: 'invalid_code' };
-      if (user.registration_code_used_at) return { ok: false, reason: 'code_used' };
-
-      return { ok: true, email: user.email };
+      const { data, error } = await supabase.rpc('check_registration_eligibility', {
+        p_login_id: loginId.trim(),
+        p_code: registrationCode.trim()
+      });
+      if (error) throw error;
+      return (data as { ok: boolean; reason?: string }) || { ok: false, reason: 'network_error' };
     } catch (e: any) {
       this.handleNetworkError(e);
       return { ok: false, reason: 'network_error' };
