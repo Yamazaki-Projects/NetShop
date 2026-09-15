@@ -27,6 +27,12 @@ const normalizeKanji = (s: string): string => s.split('').map(ch => KANJI_VARIAN
 const normalizeName = (s?: string): string => normalizeKanji((s || '').replace(/[\s　]/g, ''));
 
 /**
+ * 候補検索・絞り込み用の正規化。名前比較と同じ揺れ吸収（空白除去・異体字統一）に加えて、
+ * 案件ID(pa0001 等)を大文字小文字どちらで打っても引けるよう小文字に揃える。
+ */
+export const normalizeForSearch = (s?: string): string => normalizeName(s).toLowerCase();
+
+/**
  * 月次報酬明細のマッチ先。通常は案件(Case)だが、幹部・共同経営者が自分名義で運営する
  * ショップは案件レコードを持たないため、スタッフのユーザーアカウント自体もマッチ先に
  * できるようにしている。

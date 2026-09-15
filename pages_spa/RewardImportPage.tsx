@@ -10,7 +10,8 @@ import {
   RewardDistributionResult
 } from '../services/rewardDistribution';
 import { Case, User, UserRole, RewardBatch, RewardPayout, RewardRow } from '../types';
-import { Card, Button, Badge, Input, Textarea, Select } from '../components/UI';
+import { Card, Button, Badge, Input, Textarea } from '../components/UI';
+import { MatchTargetPicker, OwnerNameInput } from '../components/MatchTargetCombobox';
 
 interface DraftRow {
   ownerName: string;
@@ -168,8 +169,15 @@ const RewardRowsEditor = ({ rows, allCases, allUsers, onChangeRow, onRemoveRow, 
               const dist = distributions[idx];
               return (
                 <tr key={idx} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={{ padding: '6px' }}>
-                    <input style={cellInputStyle} value={row.ownerName} onChange={e => onChangeRow(idx, { ownerName: e.target.value })} />
+                  <td style={{ padding: '6px', minWidth: '180px' }}>
+                    <OwnerNameInput
+                      value={row.ownerName}
+                      targets={matchTargets}
+                      matchedId={row.matchedCaseId}
+                      onChange={ownerName => onChangeRow(idx, { ownerName })}
+                      onPick={t => onChangeRow(idx, { ownerName: t.name, matchedCaseId: t.id })}
+                      style={cellInputStyle}
+                    />
                   </td>
                   <td style={{ padding: '6px' }}>
                     <input style={cellInputStyle} value={row.mallType} onChange={e => onChangeRow(idx, { mallType: e.target.value })} />
@@ -183,31 +191,16 @@ const RewardRowsEditor = ({ rows, allCases, allUsers, onChangeRow, onRemoveRow, 
                     />
                   </td>
                   <td style={{ padding: '6px', minWidth: '220px' }}>
-                    <Select
-                      value={row.matchedCaseId || ''}
-                      onChange={e => {
-                        const newId = e.target.value || null;
-                        const matched = findMatchTarget(newId, matchTargets);
+                    <MatchTargetPicker
+                      targets={matchTargets}
+                      value={row.matchedCaseId}
+                      onSelect={t =>
                         onChangeRow(idx, {
-                          matchedCaseId: newId,
-                          ownerName: matched ? matched.name : row.ownerName
-                        });
-                      }}
-                      containerStyle={{ marginBottom: 0 }}
-                      style={{ minHeight: '32px', fontSize: '0.8rem' }}
-                    >
-                      <option value="">-- 選択してください --</option>
-                      <optgroup label="案件">
-                        {matchTargets.filter(t => t.kind === 'case').map(t => (
-                          <option key={t.id} value={t.id}>{t.label}</option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="スタッフ本人のショップ">
-                        {matchTargets.filter(t => t.kind === 'staff').map(t => (
-                          <option key={t.id} value={t.id}>{t.label}</option>
-                        ))}
-                      </optgroup>
-                    </Select>
+                          matchedCaseId: t ? t.id : null,
+                          ownerName: t ? t.name : row.ownerName
+                        })
+                      }
+                    />
                   </td>
                   <td className="align-left" style={{ padding: '8px', fontSize: '0.8rem' }}>
                     {dist ? (dist.l1 ? `${dist.l1.name} ¥${dist.l1.amount.toLocaleString()}` : 'ECPが吸収') : '-'}
