@@ -322,8 +322,10 @@ const CaseDetailPage = () => {
                 <InfoRow label="設立/開業年月日" value={isEditing ? editedCase.establishedDate : caseData.establishedDate} field="establishedDate" type="date" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} />
               </Card>
 
-              { (isEditing ? editedCase.customerType : caseData.customerType) === 'corporation' && (
-                <Card title="代表取締役情報">
+              {/* 個人事業主でも表示する。ツリー・一覧・報酬分配の表示名はこの代表者名を使うため、
+                  隠すとツリーで顧客追加したときの誤字を画面から直せなくなる。 */}
+              {(
+                <Card title={(isEditing ? editedCase.customerType : caseData.customerType) === 'corporation' ? '代表取締役情報' : '事業主（本人）情報'}>
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 260px', minWidth: '260px' }}><InfoRow label="姓" value={isEditing ? editedCase.repLastName : caseData.repLastName} field="repLastName" layout="vertical" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} /></div>
                     <div style={{ flex: '1 1 260px', minWidth: '260px' }}><InfoRow label="名" value={isEditing ? editedCase.repFirstName : caseData.repFirstName} field="repFirstName" layout="vertical" isEditing={isEditing} onChange={handleFieldChange} formatToWareki={formatToWareki} /></div>
