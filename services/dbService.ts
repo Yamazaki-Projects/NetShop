@@ -1028,7 +1028,7 @@ class DBService {
         .select()
         .single();
       if (error) throw error;
-      return { id: data.id, month: data.month, createdAt: data.created_at };
+      return { id: data.id, month: data.month, createdAt: data.created_at, unmatchedCount: 0 };
     } catch (e: any) {
       this.handleNetworkError(e);
       return null;
@@ -1037,12 +1037,20 @@ class DBService {
 
   async getRewardBatches(): Promise<RewardBatch[]> {
     try {
-      const { data, error } = await supabase
-        .from('reward_batches')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [{ data, error }, { data: unmatched, error: unmatchedError }] = await Promise.all([
+        supabase.from('reward_batches').select('*').order('created_at', { ascending: false }),
+        supabase.from('reward_rows').select('batch_id').is('matched_case_id', null)
+      ]);
       if (error) throw error;
-      return (data || []).map((b: any) => ({ id: b.id, month: b.month, createdAt: b.created_at }));
+      if (unmatchedError) throw unmatchedError;
+      const unmatchedByBatch = new Map<string, number>();
+      (unmatched || []).forEach((r: any) => unmatchedByBatch.set(r.batch_id, (unmatchedByBatch.get(r.batch_id) || 0) + 1));
+      return (data || []).map((b: any) => ({
+        id: b.id,
+        month: b.month,
+        createdAt: b.created_at,
+        unmatchedCount: unmatchedByBatch.get(b.id) || 0
+      }));
     } catch (e: any) {
       this.handleNetworkError(e);
       return [];

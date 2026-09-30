@@ -235,13 +235,14 @@ const RewardRowsEditor = ({ rows, allCases, allUsers, onChangeRow, onRemoveRow, 
   );
 };
 
-const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
+const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onChanged }: {
   batch: RewardBatch;
   allCases: Case[];
   allUsers: User[];
   isMobile: boolean;
-  onDeleted: () => void;
+  onChanged: () => void;
 }) => {
+  const isDraft = batch.unmatchedCount > 0;
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState<RewardRow[]>([]);
   const [payouts, setPayouts] = useState<RewardPayout[]>([]);
@@ -289,14 +290,16 @@ const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
     setDeleting(true);
     const result = await db.deleteRewardBatch(batch.id);
     setDeleting(false);
-    if (result.ok) onDeleted();
+    if (result.ok) onChanged();
     else alert('削除に失敗しました。');
   };
 
-  const handleSaveEdit = async () => {
+  // asDraft=true は未マッチ行が残っていても保存する（一時保存）。未マッチ行があるバッチは
+  // 下書き扱いになり、ツリー画面の報酬表示には出ない。
+  const handleSaveEdit = async (asDraft: boolean) => {
     const unmatchedCount = editRows.filter(r => !r.matchedCaseId).length;
-    if (unmatchedCount > 0) {
-      setSaveError(`${unmatchedCount}件が案件と紐付いていません。すべての行で対応する案件を選択してください。`);
+    if (!asDraft && unmatchedCount > 0) {
+      setSaveError(`${unmatchedCount}件が案件と紐付いていません。確定するにはすべての行で対応する案件を選択してください（後で埋める場合は「一時保存」）。`);
       return;
     }
     setSaving(true);
@@ -312,6 +315,7 @@ const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
       if (!result.ok) throw new Error('保存に失敗しました。');
       setEditing(false);
       await loadRows();
+      onChanged();
     } catch (e: any) {
       setSaveError(e.message || '保存中にエラーが発生しました。');
     } finally {
@@ -340,6 +344,11 @@ const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
         <div style={{ fontWeight: 800 }}>
           <i className={`fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '10px', color: 'var(--text-sub)' }}></i>
           {batch.month}
+          {isDraft && (
+            <span style={{ marginLeft: '10px' }}>
+              <Badge color="#f59e0b">一時保存中・未マッチ{batch.unmatchedCount}件</Badge>
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ color: 'var(--text-sub)', fontSize: '0.8rem', fontWeight: 700 }}>
@@ -379,9 +388,12 @@ const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
               {saveError && (
                 <div style={{ marginTop: '16px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem' }}>{saveError}</div>
               )}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <Button onClick={handleSaveEdit} disabled={saving}>
-                  {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : '変更を保存する'}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <Button onClick={() => handleSaveEdit(false)} disabled={saving}>
+                  {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : '確定して保存する'}
+                </Button>
+                <Button variant="ghost" onClick={() => handleSaveEdit(true)} disabled={saving}>
+                  <i className="fa-solid fa-floppy-disk" style={{ marginRight: '6px' }}></i>一時保存
                 </Button>
                 <Button variant="ghost" onClick={cancelEdit} disabled={saving}>キャンセル</Button>
               </div>
@@ -391,6 +403,11 @@ const BatchHistoryRow = ({ batch, allCases, allUsers, isMobile, onDeleted }: {
               <div style={{ fontSize: '0.8rem', color: 'var(--text-sub)', fontWeight: 700, marginBottom: '12px' }}>
                 対象ショップ数: {rows.length} / 報酬合計: ¥{totalReward.toLocaleString()}
               </div>
+              {isDraft && (
+                <div style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 700, marginBottom: '12px' }}>
+                  一時保存中です。未マッチの{batch.unmatchedCount}件は下の集計に入っていません。「編集」から案件を選んで確定すると、ツリー画面の報酬にも反映されます。
+                </div>
+              )}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '400px' : 'auto' }}>
                   <thead>
@@ -470,10 +487,10 @@ const RewardImportPage = () => {
     setSaveError(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (asDraft: boolean) => {
     const unmatchedCount = draftRows.filter(r => !r.matchedCaseId).length;
-    if (unmatchedCount > 0) {
-      setSaveError(`${unmatchedCount}件が案件と紐付いていません。すべての行で対応する案件を選択してください。`);
+    if (!asDraft && unmatchedCount > 0) {
+      setSaveError(`${unmatchedCount}件が案件と紐付いていません。確定するにはすべての行で対応する案件を選択してください（後で埋める場合は「一時保存」）。`);
       return;
     }
     setSaving(true);
@@ -561,10 +578,16 @@ const RewardImportPage = () => {
               <div style={{ marginTop: '16px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem' }}>{saveError}</div>
             )}
 
-            <div style={{ marginTop: '24px' }}>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : 'この内容で保存する'}
+            <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Button onClick={() => handleSave(false)} disabled={saving}>
+                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : '確定して保存する'}
               </Button>
+              <Button variant="ghost" onClick={() => handleSave(true)} disabled={saving}>
+                <i className="fa-solid fa-floppy-disk" style={{ marginRight: '6px' }}></i>一時保存
+              </Button>
+            </div>
+            <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600 }}>
+              ツリーに未登録の顧客がいて埋められないときは「一時保存」。下の分配履歴に残るので、登録後に「編集」から続きを埋めて確定できます。
             </div>
           </Card>
         </div>
@@ -576,7 +599,7 @@ const RewardImportPage = () => {
         ) : (
           <div>
             {batches.map(b => (
-              <BatchHistoryRow key={b.id} batch={b} allCases={allCases} allUsers={allUsers} isMobile={isMobile} onDeleted={loadData} />
+              <BatchHistoryRow key={b.id} batch={b} allCases={allCases} allUsers={allUsers} isMobile={isMobile} onChanged={loadData} />
             ))}
           </div>
         )}

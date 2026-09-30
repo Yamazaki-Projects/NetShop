@@ -702,7 +702,9 @@ const TierTreePage = () => {
       if (results[0].status === 'fulfilled') setAllUsers(results[0].value);
       if (results[1].status === 'fulfilled') setAllCases(results[1].value);
       if (results[2].status === 'fulfilled') {
-        const batchList = results[2].value as RewardBatch[];
+        // 一時保存中(未マッチ行が残っている)のバッチは金額が確定していないので、
+        // 代理店にも見えるツリー画面の報酬表示には出さない。
+        const batchList = (results[2].value as RewardBatch[]).filter(b => b.unmatchedCount === 0);
         setBatches(batchList);
         setSelectedBatchId(prev => prev || batchList[0]?.id || '');
       }

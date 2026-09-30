@@ -242,6 +242,10 @@ export interface RewardBatch {
   id: string;
   month: string; // 'YYYY-MM'
   createdAt: string;
+  // 案件・スタッフに紐付いていない行の数。1件以上あるバッチは「一時保存(下書き)」扱いで、
+  // ツリー画面の報酬表示には使わない。状態を別カラムで持たないのは、未マッチ行が
+  // 残ったまま確定扱いになる食い違いを構造的に起こさないため。
+  unmatchedCount: number;
 }
 
 export interface RewardRow {
