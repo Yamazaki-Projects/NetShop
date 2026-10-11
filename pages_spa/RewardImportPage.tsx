@@ -552,7 +552,7 @@ const RewardImportPage = () => {
           />
           {batches.some(b => b.month === month) && (
             <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-sub)', margin: '-4px 0 12px' }}>
-              {month} はすでに {batches.filter(b => b.month === month).length} 回取り込んであります。今回の分はこの月に足されます（入れ替わりません）。月中に届いた分を足すときも、このまま貼ってください。
+              {month} はすでに {batches.filter(b => b.month === month).length} 回取り込んであります。今回の分はこの月に足されます（入れ替わりません）。同じ明細を二重に取り込んでいないか確かめてください。
             </p>
           )}
           <Textarea
