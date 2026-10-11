@@ -673,7 +673,9 @@ const TierTreePage = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [viewMode, setViewMode] = useState<'list' | 'horizontal'>('list');
   const [batches, setBatches] = useState<RewardBatch[]>([]);
-  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+  // 月で選ぶ。月中にも取り込む（月中に届いた配当は月末の明細に載らない）ので、
+  // 同じ月の取り込みが複数あり、1回分だけ見るとその月の一部しか出ない。
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [payouts, setPayouts] = useState<RewardPayout[]>([]);
   const [rewardRows, setRewardRows] = useState<RewardRow[]>([]);
 
@@ -706,7 +708,7 @@ const TierTreePage = () => {
         // 代理店にも見えるツリー画面の報酬表示には出さない。
         const batchList = (results[2].value as RewardBatch[]).filter(b => b.unmatchedCount === 0);
         setBatches(batchList);
-        setSelectedBatchId(prev => prev || batchList[0]?.id || '');
+        setSelectedMonth(prev => prev || batchList[0]?.month || '');
       }
 
     } catch (e) {
@@ -738,18 +740,27 @@ const TierTreePage = () => {
   }, [scrollToCaseId]);
 
   useEffect(() => {
-    if (!selectedBatchId) {
+    const ids = batches.filter(b => b.month === selectedMonth).map(b => b.id);
+    if (ids.length === 0) {
       setPayouts([]);
       setRewardRows([]);
       return;
     }
-    Promise.all([db.getRewardPayouts(selectedBatchId), db.getRewardRows(selectedBatchId)]).then(([p, r]) => {
-      setPayouts(p);
-      setRewardRows(r);
+    // その月の取り込みをすべて合わせる（月末の分＋月中に足した分）
+    Promise.all([
+      Promise.all(ids.map(id => db.getRewardPayouts(id))),
+      Promise.all(ids.map(id => db.getRewardRows(id)))
+    ]).then(([p, r]) => {
+      setPayouts(p.flat());
+      setRewardRows(r.flat());
     });
-  }, [selectedBatchId]);
+  }, [selectedMonth, batches]);
 
   const payoutData = useMemo(() => buildPayoutSummaries(payouts, rewardRows), [payouts, rewardRows]);
+  const months = useMemo(
+    () => Array.from(new Set(batches.map(b => b.month))).sort((a, b) => b.localeCompare(a)),
+    [batches]
+  );
 
   // 報酬の閲覧範囲:
   //   管理者・共同経営者 … 全員分（visibleKeys = null）
@@ -982,13 +993,13 @@ const TierTreePage = () => {
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-main)' }}>
               分配対象月
               <select
-                value={selectedBatchId}
-                onChange={e => setSelectedBatchId(e.target.value)}
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
                 className="input-field"
                 style={{ padding: '6px 10px', borderRadius: '8px', fontWeight: 700 }}
               >
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>{b.month}</option>
+                {months.map(m => (
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </label>
