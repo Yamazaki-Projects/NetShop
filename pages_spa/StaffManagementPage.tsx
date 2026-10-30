@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
 import { Case, User, UserRole, UserStatus, isAdminRole } from '../types';
@@ -20,6 +21,8 @@ const ROLE_COLORS: Record<string, string> = {
 
 const StaffManagementPage = () => {
   const { user: currentUser } = useAppContext();
+  // 紹介ツリーで幹部を押したとき、その人の行まで移動して目立たせる
+  const focusLoginId = (new URLSearchParams(useLocation().search).get('focus') || '').toLowerCase();
   const [staffList, setStaffList] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allCases, setAllCases] = useState<Case[]>([]);
@@ -43,6 +46,11 @@ const StaffManagementPage = () => {
   useEffect(() => {
     if (isAdminRole(currentUser?.role)) loadStaff();
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!focusLoginId || loading) return;
+    document.getElementById(`staff-${focusLoginId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusLoginId, loading]);
 
   if (currentUser?.role !== UserRole.ADMIN) {
     return <div style={{ padding: '48px', textAlign: 'center' }}>このページを表示する権限がありません。</div>;
@@ -171,6 +179,7 @@ const StaffManagementPage = () => {
             {staffList.map(u => (
               <div
                 key={u.id}
+                id={`staff-${(u.loginId || '').toLowerCase()}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -178,7 +187,7 @@ const StaffManagementPage = () => {
                   padding: '16px 20px',
                   background: 'var(--bg-main)',
                   borderRadius: '12px',
-                  border: '1px solid var(--border)',
+                  border: (u.loginId || '').toLowerCase() === focusLoginId ? '2px solid var(--primary)' : '1px solid var(--border)',
                   flexWrap: 'wrap',
                   gap: '12px',
                 }}

@@ -290,6 +290,16 @@ const getTreeChildren = (user: User, allCases: Case[], allUsers: User[]): User[]
   }), ...childStaff];
 };
 
+// ノードを押したときの行き先。顧客は顧客詳細、幹部・共同経営者は顧客データを持たないので
+// スタッフ管理のその人の行（スタッフ管理は管理者専用なので、管理者が見ているときだけ）。
+const getNodeDetailPath = (user: User, associatedCase: Case | undefined, viewer: User): string | null => {
+  if (associatedCase) return `/cases/${associatedCase.id}`;
+  if ((user.role === UserRole.EXECUTIVE || user.role === UserRole.CO_OWNER) && viewer.role === UserRole.ADMIN) {
+    return `/staff?focus=${encodeURIComponent((user.loginId || '').toLowerCase())}`;
+  }
+  return null;
+};
+
 // 紐付く案件情報を取得（縦リスト・横ツリー共通）
 const getAssociatedCase = (user: User, allCases: Case[]) => {
   return allCases.find(c => (c.id || '').toLowerCase() === (user.loginId || '').toLowerCase());
@@ -374,6 +384,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
 
   const associatedCase = useMemo(() => getAssociatedCase(user, allCases), [user.loginId, allCases]);
   const isHighlighted = !!associatedCase && associatedCase.id === highlightedCaseId;
+  const detailPath = getNodeDetailPath(user, associatedCase, currentUser);
   const payoutSummary = canViewPayoutOf(user, visibleKeys) ? getPayoutForUser(user, payoutMap) : undefined;
 
   const getStatusIcon = () => {
@@ -413,10 +424,10 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
         zIndex: 1,
         maxWidth: '650px',
         minWidth: isMobile ? '260px' : '420px',
-        cursor: associatedCase ? 'pointer' : 'default'
+        cursor: detailPath ? 'pointer' : 'default'
       }}
       className="tree-node-hover"
-      onClick={() => associatedCase && navigate(`/cases/${associatedCase.id}`)}
+      onClick={() => detailPath && navigate(detailPath)}
       >
         <div 
           onClick={(e) => {
@@ -544,8 +555,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
               variant="ghost" 
               onClick={(e) => { 
                 e.stopPropagation(); 
-                if (associatedCase) navigate(`/cases/${associatedCase.id}`);
-                else navigate(isAdmin ? `/agencies` : `/cases`);
+                navigate(detailPath || (isAdmin ? `/agencies` : `/cases`));
               }} 
               style={{ padding: '6px 12px', fontSize: '0.7rem', fontWeight: 800, border: '1.5px solid var(--border)', borderRadius: '10px', background: 'var(--bg-main)' }}
             >
@@ -601,6 +611,8 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
   const isSelf = currentUser.id === user.id;
   const associatedCase = useMemo(() => getAssociatedCase(user, allCases), [user.loginId, allCases]);
 
+  const detailPath = getNodeDetailPath(user, associatedCase, currentUser);
+
   const displayName = [associatedCase?.repLastName, associatedCase?.repFirstName].filter(Boolean).join(' ') || user.name || associatedCase?.companyName;
   const payoutSummary = canViewPayoutOf(user, visibleKeys) ? getPayoutForUser(user, payoutMap) : undefined;
 
@@ -608,7 +620,7 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
     <li>
       <div
         className={`htree-node ${isSelf ? 'htree-node-self' : ''}`}
-        onClick={() => associatedCase && navigate(`/cases/${associatedCase.id}`)}
+        onClick={() => detailPath && navigate(detailPath)}
       >
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <span className="htree-node-name">{displayName}</span>
