@@ -6,6 +6,8 @@ import { useAppContext } from '../App';
 import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case, User, ProgressComment, InitialCommission, isAdminRole } from '../types';
 import { Card, Button, Badge, Input, Select, Textarea } from '../components/UI';
 import InfoRow from '../components/InfoRow';
+import StaffLinkNotice, { canMergeIntoStaff, mergeCustomerIntoStaffWithConfirm } from '../components/StaffLinkNotice';
+import { findStaffByName } from '../services/rewardDistribution';
 
 type TabType = 'opening' | 'basic';
 
@@ -34,6 +36,8 @@ const CaseDetailPage = () => {
   const [commissionUpdating, setCommissionUpdating] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountInput, setAmountInput] = useState('');
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [merging, setMerging] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -54,13 +58,14 @@ const CaseDetailPage = () => {
         setCustomerUser(u);
         const caseCommission = commissions.find(ic => (ic.caseId || '').toLowerCase() === (c.id || '').toLowerCase());
         setCommission(caseCommission || null);
+        if (canMergeIntoStaff(user)) setAllUsers(await db.getUsers());
       }
     } catch (err) {
       console.error("Failed to load details", err);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     setLoading(true);
@@ -207,8 +212,31 @@ const CaseDetailPage = () => {
     setCommissionUpdating(false);
   };
 
+  // 代表者名が幹部・共同経営者と同じなら、同一人物として統合する候補を出す
+  const staffCandidate = canMergeIntoStaff(user) && caseData
+    ? findStaffByName([caseData.repLastName, caseData.repFirstName].filter(Boolean).join(''), allUsers)
+    : undefined;
+
+  const handleMergeIntoStaff = async () => {
+    if (!caseData || !staffCandidate) return;
+    setMerging(true);
+    try {
+      if (await mergeCustomerIntoStaffWithConfirm(caseData.id, staffCandidate)) navigate('/tree');
+    } finally {
+      setMerging(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto' }} className="animate-fade-in">
+      {staffCandidate && (
+        <StaffLinkNotice
+          staff={staffCandidate}
+          actionLabel={merging ? '統合しています…' : `幹部の${staffCandidate.name}さんに統合する`}
+          onAction={handleMergeIntoStaff}
+          disabled={merging}
+        />
+      )}
       <header style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom: '40px', gap: '20px' }}>
         <div style={{ textAlign: 'left' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>

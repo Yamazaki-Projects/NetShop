@@ -270,3 +270,16 @@ export interface RewardPayout {
   amount: number;
   createdAt: string;
 }
+
+export interface MergeCustomerResult {
+  ok: boolean;
+  reason?: string;
+  executed?: boolean;
+  staffName?: string;
+  newReferrerName?: string;
+  childCases?: number;
+  childUsers?: number;
+  commissions?: number;
+  payouts?: number;
+  rewardRows?: number;
+}

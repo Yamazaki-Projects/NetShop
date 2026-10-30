@@ -33,6 +33,18 @@ const normalizeName = (s?: string): string => normalizeKanji((s || '').replace(/
 export const normalizeForSearch = (s?: string): string => normalizeName(s).toLowerCase();
 
 /**
+ * 顧客の代表者名から、同じ名前の幹部・共同経営者を探す（同一人物の候補）。
+ * 自動では統合せず、画面で「この人は幹部の◯◯さんでは？」と確認してもらうための候補出し。
+ */
+export const findStaffByName = (fullName: string | undefined, allUsers: User[]): User | undefined => {
+  const target = normalizeName(fullName);
+  if (!target) return undefined;
+  return allUsers.find(u =>
+    (u.role === UserRole.EXECUTIVE || u.role === UserRole.CO_OWNER) && normalizeName(u.name) === target
+  );
+};
+
+/**
  * 月次報酬明細のマッチ先。通常は案件(Case)だが、幹部・共同経営者が自分名義で運営する
  * ショップは案件レコードを持たないため、スタッフのユーザーアカウント自体もマッチ先に
  * できるようにしている。

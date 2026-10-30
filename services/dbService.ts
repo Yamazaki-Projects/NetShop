@@ -12,7 +12,8 @@ import {
   isAdminRole,
   RewardBatch,
   RewardRow,
-  RewardPayout
+  RewardPayout,
+  MergeCustomerResult
 } from '../types';
 import { supabase } from './supabaseClient.browser';
 
@@ -893,6 +894,27 @@ class DBService {
     } catch (e: any) {
       this.handleNetworkError(e);
       return { ok: false, reason: 'network_error' };
+    }
+  }
+
+  // 同一人物の顧客アカウント(pa)を幹部・共同経営者アカウントに統合する。
+  // execute=false なら何も変えずに、移す件数と引き継ぐ紹介者だけを返す（確認用）。
+  async mergeCustomerIntoStaff(
+    customerLoginId: string,
+    staffLoginId: string,
+    execute: boolean
+  ): Promise<MergeCustomerResult> {
+    try {
+      const { data, error } = await supabase.rpc('merge_customer_into_staff', {
+        p_customer_login: customerLoginId,
+        p_staff_login: staffLoginId,
+        p_execute: execute
+      });
+      if (error) throw error;
+      return (data as MergeCustomerResult) || { ok: false, reason: 'network_error' };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, reason: e?.message || 'network_error' };
     }
   }
 

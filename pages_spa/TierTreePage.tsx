@@ -6,6 +6,8 @@ import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { User, UserStatus, UserRole, AgencyApplicationStatus, Case, MembershipPlan, isAdminRole, RewardBatch, RewardRow, RewardPayout } from '../types';
 import { Badge, Button, Card, Input, Select, AgencyStatusBadge } from '../components/UI';
+import StaffLinkNotice, { canMergeIntoStaff, registerAsStaff } from '../components/StaffLinkNotice';
+import { findStaffByName } from '../services/rewardDistribution';
 
 interface PayoutSource { fromName: string; mallType: string; amount: number; type: 'l1' | 'l2'; }
 interface PayoutSummary { total: number; l1: number; l2: number; sources: PayoutSource[]; }
@@ -240,7 +242,18 @@ const getCommissionBadge = (level: number, viewerPlan: MembershipPlan | undefine
   return null;
 };
 
-// 子要素は cases テーブルの紹介関係を追う（縦リスト・横ツリー共通）
+// 顧客アカウントを統合した幹部は、顧客だったときの紹介者を引き継いでいる。
+// 紹介者がECP本体（管理者・共同経営者）以外なら、最上位ではなくその人の下に表示する。
+const isStaffUnderReferrer = (u: User, allUsers: User[]): boolean => {
+  if (u.role !== UserRole.EXECUTIVE && u.role !== UserRole.CO_OWNER) return false;
+  const refKey = (u.referrerId || '').toLowerCase();
+  if (!refKey) return false;
+  const referrer = allUsers.find(r => identifierKeys(r).includes(refKey));
+  return !!referrer && referrer.role !== UserRole.ADMIN && referrer.role !== UserRole.CO_OWNER;
+};
+
+// 子要素は cases テーブルの紹介関係を追う（縦リスト・横ツリー共通）。
+// 幹部は案件を持たないので、紹介者の下に置く幹部だけ users から足す。
 const getTreeChildren = (user: User, allCases: Case[], allUsers: User[]): User[] => {
   // User.id だけで照合すると、referrer_id が loginId 形式で保存された案件が
   // 子ノードとして現れず、傘下（とその報酬）が丸ごと欠落する。
@@ -254,7 +267,13 @@ const getTreeChildren = (user: User, allCases: Case[], allUsers: User[]): User[]
     })
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-  return childCases.map(c => {
+  const childStaff = allUsers.filter(u =>
+    keys.includes((u.referrerId || '').toLowerCase()) &&
+    !keys.includes((u.id || '').toLowerCase()) &&
+    isStaffUnderReferrer(u, allUsers)
+  );
+
+  return [...childCases.map(c => {
     const u = allUsers.find(usr => (usr.loginId || '').toLowerCase() === (c.id || '').toLowerCase());
     if (u) return u;
     // ユーザーが見つからない場合は、案件情報から最小限のユーザーオブジェクトを作成
@@ -268,7 +287,7 @@ const getTreeChildren = (user: User, allCases: Case[], allUsers: User[]): User[]
       agencyApplicationStatus: AgencyApplicationStatus.NONE,
       createdAt: c.createdAt
     } as User;
-  });
+  }), ...childStaff];
 };
 
 // 紐付く案件情報を取得（縦リスト・横ツリー共通）
@@ -293,6 +312,15 @@ const buildVisibleRecipientKeys = (viewer: User, allCases: Case[], allUsers: Use
     else childrenByReferrer.set(refKey, [c]);
   });
 
+  const staffByReferrer = new Map<string, User[]>();
+  allUsers.forEach(u => {
+    if (!isStaffUnderReferrer(u, allUsers)) return;
+    const refKey = (u.referrerId || '').toLowerCase();
+    const list = staffByReferrer.get(refKey);
+    if (list) list.push(u);
+    else staffByReferrer.set(refKey, [u]);
+  });
+
   const visible = new Set<string>();
   const queue: string[] = [];
   // 各キーは高々1回しか visible/queue に入らないため、紹介関係が循環していても停止する
@@ -312,6 +340,7 @@ const buildVisibleRecipientKeys = (viewer: User, allCases: Case[], allUsers: Use
       const childUser = userByKey.get(caseKey);
       push(childUser ? [...identifierKeys(childUser), caseKey] : [caseKey]);
     });
+    (staffByReferrer.get(key) || []).forEach(u => push(identifierKeys(u)));
   }
   return visible;
 };
@@ -819,6 +848,7 @@ const TierTreePage = () => {
       // スタッフ本人を人のノードとしてルートに立て、その配下に案件をぶら下げる。
       const staffRoots = allUsers.filter(u =>
         (u.role === UserRole.CO_OWNER || u.role === UserRole.EXECUTIVE) &&
+        !isStaffUnderReferrer(u, allUsers) &&
         allCases.some(c => (c.referrerId || '').toLowerCase() === (u.id || '').toLowerCase())
       );
       const staffIds = staffRoots.map(u => (u.id || '').toLowerCase());
@@ -902,6 +932,35 @@ const TierTreePage = () => {
         await loadData();
         setScrollToCaseId(created.id);
       }
+    } catch (e: any) {
+      alert("登録に失敗しました: " + e.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  // 代表者名が幹部・共同経営者と同じなら、新しい顧客を作らずその人として紹介者の下に置けるようにする
+  const staffCandidate = canMergeIntoStaff(user)
+    ? (newCaseForm.repLastName && newCaseForm.repFirstName
+      ? findStaffByName(newCaseForm.repLastName + newCaseForm.repFirstName, allUsers)
+      : undefined)
+    : undefined;
+  const showStaffLink = !!staffCandidate && staffCandidate.id !== selectedReferrerId;
+
+  const handleCreateAsStaff = async (referrerName: string) => {
+    if (!user || !selectedReferrerId || !staffCandidate) return;
+    if (newCaseForm.customerType === 'corporation' && !newCaseForm.companyName) {
+      alert('会社名を入力してください。');
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      const linked = await registerAsStaff(newCaseForm, user, staffCandidate, referrerName, selectedReferrerId);
+      if (linked) {
+        setShowCreateModal(false);
+        setNewCaseForm({ companyName: '', repLastName: '', repFirstName: '', customerType: 'corporation' });
+      }
+      await loadData();
     } catch (e: any) {
       alert("登録に失敗しました: " + e.message);
     } finally {
@@ -1141,11 +1200,20 @@ const TierTreePage = () => {
                   style={{ flex: 1 }}
                 />
               </div>
+
+              {showStaffLink && staffCandidate && (
+                <StaffLinkNotice
+                  staff={staffCandidate}
+                  actionLabel={`幹部の${staffCandidate.name}さんとして登録する`}
+                  onAction={() => handleCreateAsStaff(selectedReferrerName)}
+                  disabled={createLoading}
+                />
+              )}
               
               <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
                 <Button variant="ghost" onClick={() => setShowCreateModal(false)} style={{ flex: 1 }}>キャンセル</Button>
                 <Button type="submit" disabled={createLoading} style={{ flex: 2 }}>
-                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '顧客を登録する'}
+                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : showStaffLink ? '別人として登録する' : '顧客を登録する'}
                 </Button>
               </div>
             </form>

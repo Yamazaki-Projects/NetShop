@@ -5,6 +5,8 @@ import { useAppContext } from '../App';
 import { db } from '../services/dbService';
 import { CaseStatus, MallOpeningStatus, Case, UserStatus, AgencyApplicationStatus, User, isAdminRole } from '../types';
 import { Card, Input, Button, Badge, Select, AgencyStatusBadge } from '../components/UI';
+import StaffLinkNotice, { canMergeIntoStaff, registerAsStaff } from '../components/StaffLinkNotice';
+import { findStaffByName } from '../services/rewardDistribution';
 
 const CaseListPage = () => {
   const { user } = useAppContext();
@@ -86,6 +88,35 @@ const CaseListPage = () => {
       // alert ではなく、より詳細なエラーメッセージを表示するように修正
       console.error("Case creation failed:", e);
       alert(e.message || "登録に失敗しました。");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  // 代表者名が幹部・共同経営者と同じなら、新しい顧客を作らずその人として登録できるようにする
+  const staffCandidate = canMergeIntoStaff(user)
+    ? (newCaseForm.repLastName && newCaseForm.repFirstName
+      ? findStaffByName(newCaseForm.repLastName + newCaseForm.repFirstName, allUsers)
+      : undefined)
+    : undefined;
+
+  const handleCreateAsStaff = async () => {
+    if (!user || !staffCandidate) return;
+    if (!newCaseForm.companyName || !newCaseForm.email) {
+      alert('会社名（屋号）とメールアドレスを入力してください。');
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      const linked = await registerAsStaff(newCaseForm, user, staffCandidate, user.name);
+      if (linked) {
+        setShowCreateModal(false);
+        navigate('/tree');
+      } else {
+        await loadData();
+      }
+    } catch (e: any) {
+      alert(e.message || '登録に失敗しました。');
     } finally {
       setCreateLoading(false);
     }
@@ -218,6 +249,15 @@ const CaseListPage = () => {
                   style={{ flex: 1 }}
                 />
               </div>
+
+              {staffCandidate && (
+                <StaffLinkNotice
+                  staff={staffCandidate}
+                  actionLabel={`幹部の${staffCandidate.name}さんとして登録する`}
+                  onAction={handleCreateAsStaff}
+                  disabled={createLoading}
+                />
+              )}
               
               <Input 
                 label="メールアドレス" 
@@ -236,7 +276,7 @@ const CaseListPage = () => {
               <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
                 <Button variant="ghost" onClick={() => setShowCreateModal(false)} style={{ flex: 1 }}>キャンセル</Button>
                 <Button type="submit" disabled={createLoading} style={{ flex: 2 }}>
-                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : '顧客を登録する'}
+                  {createLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : staffCandidate ? '別人として登録する' : '顧客を登録する'}
                 </Button>
               </div>
             </form>
