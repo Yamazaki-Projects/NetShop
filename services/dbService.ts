@@ -304,32 +304,11 @@ class DBService {
         if (refUser) referrerName = refUser.name;
       }
 
-      const { data: lastCases } = await supabase
-        .from('cases')
-        .select('id')
-        .ilike('id', 'pa%')
-        .order('id', { ascending: false })
-        .limit(1);
-
-      const { data: lastUsers } = await supabase
-        .from('users')
-        .select('login_id')
-        .ilike('login_id', 'pa%')
-        .order('login_id', { ascending: false })
-        .limit(1);
-
-      let maxCaseNum = 0;
-      let maxUserNum = 0;
-
-      if (lastCases && lastCases.length > 0) {
-        maxCaseNum = parseInt(lastCases[0].id.replace(/pa/i, ''), 10);
-      }
-      if (lastUsers && lastUsers.length > 0) {
-        maxUserNum = parseInt(lastUsers[0].login_id.replace(/pa/i, ''), 10);
-      }
-
-      const nextIdNum = Math.max(maxCaseNum, maxUserNum) + 1;
-      const nextId = `pa${String(nextIdNum).padStart(4, '0')}`;
+      // 顧客番号はDBの連番から払い出す。「最大番号＋1」だと、統合・削除で空いた番号が
+      // 使い回されて、履歴に残った番号が別人を指してしまうため。
+      const { data: nextIdData, error: nextIdError } = await supabase.rpc('next_pa_id');
+      if (nextIdError || !nextIdData) throw new Error('顧客番号の発行に失敗しました。');
+      const nextId = nextIdData as string;
 
       const dbPayload = {
         id: nextId,
