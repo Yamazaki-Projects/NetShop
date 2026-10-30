@@ -858,10 +858,12 @@ const TierTreePage = () => {
       // 幹部・共同経営者は cases に自分のレコードを持たないため、そのまま案件だけを
       // ルートにすると「幹部が紹介した案件」が親のいない最上位として横並びになってしまう。
       // スタッフ本人を人のノードとしてルートに立て、その配下に案件をぶら下げる。
+      // 傘下がいなくても、紹介者が入っている幹部（顧客から統合した人など、ツリーに置いた人）は出す。
+      // 傘下も紹介者も無いスタッフ（スタッフ管理で作っただけの人）は従来どおり出さない。
       const staffRoots = allUsers.filter(u =>
         (u.role === UserRole.CO_OWNER || u.role === UserRole.EXECUTIVE) &&
         !isStaffUnderReferrer(u, allUsers) &&
-        allCases.some(c => (c.referrerId || '').toLowerCase() === (u.id || '').toLowerCase())
+        (!!u.referrerId || getTreeChildren(u, allCases, allUsers).length > 0)
       );
       const staffIds = staffRoots.map(u => (u.id || '').toLowerCase());
 
