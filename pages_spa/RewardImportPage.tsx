@@ -7,7 +7,8 @@ import {
   buildMatchTargets,
   findMatchTarget,
   MatchTarget,
-  RewardDistributionResult
+  RewardDistributionResult,
+  resolveCaseDisplayName
 } from '../services/rewardDistribution';
 import { Case, User, UserRole, RewardBatch, RewardPayout, RewardRow } from '../types';
 import { Card, Button, Badge, Input, Textarea } from '../components/UI';
@@ -103,16 +104,6 @@ const parsePastedTable = (text: string): DraftRow[] =>
 const currentMonthValue = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-// ツリー画面(TierTreePage の displayName)と同じ優先順位：代表者名 → ユーザーアカウントの
-// 個人名 → 会社名。法人の案件で代表者名が未入力でも、会社名より先にアカウントの個人名を
-// 使うことで「誰なのか会社名だとわからない」状態を避ける。
-const resolveCaseDisplayName = (c: Case, allUsers: User[]): string => {
-  const repName = [c.repLastName, c.repFirstName].filter(Boolean).join(' ');
-  if (repName) return repName;
-  const owner = allUsers.find(u => (u.loginId || '').toLowerCase() === (c.id || '').toLowerCase());
-  return owner?.name || c.companyName || '不明';
 };
 
 const cellInputStyle: React.CSSProperties = {

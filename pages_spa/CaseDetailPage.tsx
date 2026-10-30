@@ -7,6 +7,7 @@ import { MallOpeningStatus, UserStatus, AgencyApplicationStatus, UserRole, Case,
 import { Card, Button, Badge, Input, Select, Textarea } from '../components/UI';
 import InfoRow from '../components/InfoRow';
 import StaffLinkNotice, { canMergeIntoStaff, mergeCustomerIntoStaffWithConfirm } from '../components/StaffLinkNotice';
+import ReferrerEditor from '../components/ReferrerEditor';
 import { findStaffByName } from '../services/rewardDistribution';
 
 type TabType = 'opening' | 'basic';
@@ -37,6 +38,7 @@ const CaseDetailPage = () => {
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountInput, setAmountInput] = useState('');
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allCases, setAllCases] = useState<Case[]>([]);
   const [merging, setMerging] = useState(false);
 
   useEffect(() => {
@@ -59,6 +61,7 @@ const CaseDetailPage = () => {
         const caseCommission = commissions.find(ic => (ic.caseId || '').toLowerCase() === (c.id || '').toLowerCase());
         setCommission(caseCommission || null);
         if (canMergeIntoStaff(user)) setAllUsers(await db.getUsers());
+        if (user?.role === UserRole.ADMIN) setAllCases(await db.getAllCases());
       }
     } catch (err) {
       console.error("Failed to load details", err);
@@ -247,6 +250,21 @@ const CaseDetailPage = () => {
           <h1 style={{ fontSize: isMobile ? '1.8rem' : '2.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.03em' }}>
             {[caseData.repLastName, caseData.repFirstName].filter(Boolean).join(' ') || caseData.companyName} <span style={{fontSize: '1.2rem', color: 'var(--text-sub)'}}>様</span>
           </h1>
+          {user?.role === UserRole.ADMIN && allUsers.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-sub)' }}>
+              <span style={{ fontWeight: 800 }}>紹介者：</span>
+              <ReferrerEditor
+                target={{
+                  loginId: caseData.id,
+                  name: [caseData.repLastName, caseData.repFirstName].filter(Boolean).join(' ') || caseData.companyName,
+                  referrerId: customerUser?.referrerId || caseData.referrerId
+                }}
+                allUsers={allUsers}
+                allCases={allCases}
+                onChanged={loadData}
+              />
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '12px', width: isMobile ? '100%' : 'auto' }}>
           {!isEditing ? (

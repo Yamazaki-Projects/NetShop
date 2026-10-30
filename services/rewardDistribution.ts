@@ -59,6 +59,16 @@ export interface MatchTarget {
   referrerId?: string;
 }
 
+// ツリー画面(TierTreePage の displayName)と同じ優先順位：代表者名 → ユーザーアカウントの
+// 個人名 → 会社名。法人の案件で代表者名が未入力でも、会社名より先にアカウントの個人名を
+// 使うことで「誰なのか会社名だとわからない」状態を避ける。
+export const resolveCaseDisplayName = (c: Case, allUsers: User[]): string => {
+  const repName = [c.repLastName, c.repFirstName].filter(Boolean).join(' ');
+  if (repName) return repName;
+  const owner = allUsers.find(u => (u.loginId || '').toLowerCase() === (c.id || '').toLowerCase());
+  return owner?.name || c.companyName || '不明';
+};
+
 /** マッチ先として選択できる案件・スタッフの一覧を作る。 */
 export const buildMatchTargets = (
   allCases: Case[],

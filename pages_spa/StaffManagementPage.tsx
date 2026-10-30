@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/dbService';
 import { useAppContext } from '../App';
-import { User, UserRole, UserStatus, isAdminRole } from '../types';
+import { Case, User, UserRole, UserStatus, isAdminRole } from '../types';
 import { Card, Button, Badge, Input, Select } from '../components/UI';
+import ReferrerEditor from '../components/ReferrerEditor';
 
 const ROLE_LABELS: Record<string, string> = {
   [UserRole.ADMIN]:     '管理者',
@@ -20,6 +21,8 @@ const ROLE_COLORS: Record<string, string> = {
 const StaffManagementPage = () => {
   const { user: currentUser } = useAppContext();
   const [staffList, setStaffList] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allCases, setAllCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -30,8 +33,10 @@ const StaffManagementPage = () => {
 
   const loadStaff = async () => {
     setLoading(true);
-    const all = await db.getUsers();
+    const [all, cases] = await Promise.all([db.getUsers(), db.getAllCases()]);
     setStaffList(all.filter(u => isAdminRole(u.role)));
+    setAllUsers(all);
+    setAllCases(cases);
     setLoading(false);
   };
 
@@ -190,6 +195,17 @@ const StaffManagementPage = () => {
                   <div>
                     <div style={{ fontWeight: 900, color: 'var(--text-main)', fontSize: '0.95rem' }}>{u.name || '(名前未設定)'}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-sub)', fontWeight: 700 }}>ID: {u.loginId}</div>
+                    {u.role !== UserRole.ADMIN && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-sub)' }}>
+                        <span style={{ fontWeight: 800 }}>紹介者：</span>
+                        <ReferrerEditor
+                          target={{ loginId: u.loginId, name: u.name, referrerId: u.referrerId }}
+                          allUsers={allUsers}
+                          allCases={allCases}
+                          onChanged={loadStaff}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

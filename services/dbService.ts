@@ -918,6 +918,21 @@ class DBService {
     }
   }
 
+  // 紹介者の付け替え（管理者のみ）。過去の報酬は当時の紹介者のまま残る。
+  async changeReferrer(targetLoginId: string, newReferrerLoginId: string): Promise<{ ok: boolean; reason?: string; newReferrerName?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('change_referrer', {
+        p_target_login: targetLoginId,
+        p_new_referrer_login: newReferrerLoginId
+      });
+      if (error) throw error;
+      return (data as { ok: boolean; reason?: string; newReferrerName?: string }) || { ok: false, reason: 'network_error' };
+    } catch (e: any) {
+      this.handleNetworkError(e);
+      return { ok: false, reason: e?.message || 'network_error' };
+    }
+  }
+
   async completeRegistration(
     loginId: string,
     registrationCode: string,
