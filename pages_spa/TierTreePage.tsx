@@ -7,7 +7,7 @@ import { db } from '../services/dbService';
 import { User, UserStatus, UserRole, AgencyApplicationStatus, Case, MembershipPlan, isAdminRole, RewardBatch, RewardRow, RewardPayout } from '../types';
 import { Badge, Button, Card, Input, Select, AgencyStatusBadge } from '../components/UI';
 import StaffLinkNotice, { canMergeIntoStaff, registerAsStaff } from '../components/StaffLinkNotice';
-import { findStaffByName } from '../services/rewardDistribution';
+import { findStaffByName, normalizeForSearch } from '../services/rewardDistribution';
 
 interface PayoutSource { fromName: string; mallType: string; amount: number; type: 'l1' | 'l2'; }
 interface PayoutSummary { total: number; l1: number; l2: number; sources: PayoutSource[]; }
@@ -300,6 +300,11 @@ const getNodeDetailPath = (user: User, associatedCase: Case | undefined, viewer:
   return null;
 };
 
+// ノードの識別子。顧客は案件ID、幹部は loginId（案件を持たないため）。
+// 検索・登録直後のスクロールとハイライトはこの値で探す。
+const getNodeKey = (user: User, associatedCase: Case | undefined): string =>
+  associatedCase?.id || user.loginId || user.id;
+
 // 紐付く案件情報を取得（縦リスト・横ツリー共通）
 const getAssociatedCase = (user: User, allCases: Case[]) => {
   return allCases.find(c => (c.id || '').toLowerCase() === (user.loginId || '').toLowerCase());
@@ -383,7 +388,8 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
   const isSelf = currentUser.id === user.id;
 
   const associatedCase = useMemo(() => getAssociatedCase(user, allCases), [user.loginId, allCases]);
-  const isHighlighted = !!associatedCase && associatedCase.id === highlightedCaseId;
+  const nodeKey = getNodeKey(user, associatedCase);
+  const isHighlighted = !!highlightedCaseId && nodeKey === highlightedCaseId;
   const detailPath = getNodeDetailPath(user, associatedCase, currentUser);
   const payoutSummary = canViewPayoutOf(user, visibleKeys) ? getPayoutForUser(user, payoutMap) : undefined;
 
@@ -397,7 +403,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
 
   return (
     <div
-      data-case-id={associatedCase?.id}
+      data-case-id={nodeKey}
       style={{
         marginLeft: level === 0 ? 0 : (isMobile ? '18px' : '40px'),
         marginBottom: '12px',
@@ -593,7 +599,7 @@ const TreeNode = ({ user, level, isAdmin, currentUser, allUsers, allCases, onAdd
 };
 
 // 横方向ツリー（家系図/組織図スタイル）: 親から水平線で分岐し、各子ノードへ縦線で接続する
-const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, onAddCustomer, payoutMap, visibleKeys, isMobile }: {
+const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, onAddCustomer, payoutMap, visibleKeys, isMobile, highlightedCaseId }: {
   user: User;
   isAdmin: boolean;
   currentUser: User;
@@ -603,6 +609,7 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
   payoutMap: PayoutMap;
   visibleKeys: Set<string> | null;
   isMobile?: boolean;
+  highlightedCaseId?: string | null;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const navigate = useNavigate();
@@ -612,6 +619,8 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
   const associatedCase = useMemo(() => getAssociatedCase(user, allCases), [user.loginId, allCases]);
 
   const detailPath = getNodeDetailPath(user, associatedCase, currentUser);
+  const nodeKey = getNodeKey(user, associatedCase);
+  const isHighlighted = !!highlightedCaseId && nodeKey === highlightedCaseId;
 
   const displayName = [associatedCase?.repLastName, associatedCase?.repFirstName].filter(Boolean).join(' ') || user.name || associatedCase?.companyName;
   const payoutSummary = canViewPayoutOf(user, visibleKeys) ? getPayoutForUser(user, payoutMap) : undefined;
@@ -620,6 +629,8 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
     <li>
       <div
         className={`htree-node ${isSelf ? 'htree-node-self' : ''}`}
+        data-case-id={nodeKey}
+        style={isHighlighted ? { boxShadow: '0 0 0 3px #10b981', background: 'rgba(16, 185, 129, 0.12)' } : undefined}
         onClick={() => detailPath && navigate(detailPath)}
       >
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
@@ -664,6 +675,7 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
               payoutMap={payoutMap}
               visibleKeys={visibleKeys}
               isMobile={isMobile}
+              highlightedCaseId={highlightedCaseId}
             />
           ))}
         </ul>
@@ -672,7 +684,7 @@ const HorizontalTreeNode = ({ user, isAdmin, currentUser, allUsers, allCases, on
   );
 };
 
-const HorizontalTree = ({ roots, isAdmin, currentUser, allUsers, allCases, onAddCustomer, payoutMap, visibleKeys, isMobile }: {
+const HorizontalTree = ({ roots, isAdmin, currentUser, allUsers, allCases, onAddCustomer, payoutMap, visibleKeys, isMobile, highlightedCaseId }: {
   roots: User[];
   isAdmin: boolean;
   currentUser: User;
@@ -682,6 +694,7 @@ const HorizontalTree = ({ roots, isAdmin, currentUser, allUsers, allCases, onAdd
   payoutMap: PayoutMap;
   visibleKeys: Set<string> | null;
   isMobile?: boolean;
+  highlightedCaseId?: string | null;
 }) => (
   <div className="htree-wrap">
     <div className="htree">
@@ -698,6 +711,7 @@ const HorizontalTree = ({ roots, isAdmin, currentUser, allUsers, allCases, onAdd
             payoutMap={payoutMap}
             visibleKeys={visibleKeys}
             isMobile={isMobile}
+            highlightedCaseId={highlightedCaseId}
           />
         ))}
       </ul>
@@ -732,6 +746,7 @@ const TierTreePage = () => {
   });
   const [scrollToCaseId, setScrollToCaseId] = useState<string | null>(null);
   const [highlightedCaseId, setHighlightedCaseId] = useState<string | null>(null);
+  const [treeQuery, setTreeQuery] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -909,6 +924,30 @@ const TierTreePage = () => {
     return me ? [me] : [user];
   }, [allUsers, allCases, user]);
 
+  // ツリー内検索の対象。今ツリーに出ている人だけを、親(紹介者)の名前と一緒に並べる。
+  const searchableNodes = useMemo(() => {
+    const list: { key: string; name: string; company: string; id: string; parentName: string; haystack: string }[] = [];
+    const seen = new Set<string>();
+    const walk = (u: User, parentName: string) => {
+      if (seen.has(u.id)) return;
+      seen.add(u.id);
+      const c = getAssociatedCase(u, allCases);
+      const name = [c?.repLastName, c?.repFirstName].filter(Boolean).join(' ') || u.name || c?.companyName || '不明';
+      const company = c?.companyName || '';
+      const id = (c?.id || u.loginId || '').toLowerCase();
+      list.push({ key: getNodeKey(u, c), name, company, id, parentName, haystack: normalizeForSearch(`${name}${company}${id}`) });
+      getTreeChildren(u, allCases, allUsers).forEach(child => walk(child, name));
+    };
+    roots.forEach(r => walk(r, ''));
+    return list;
+  }, [roots, allCases, allUsers]);
+
+  const treeSearchResults = useMemo(() => {
+    const q = normalizeForSearch(treeQuery);
+    if (!q) return [];
+    return searchableNodes.filter(n => n.haystack.includes(q)).slice(0, 10);
+  }, [searchableNodes, treeQuery]);
+
   const handleAddCustomerClick = (userId: string) => {
     setSelectedReferrerId(userId);
     setShowCreateModal(true);
@@ -1040,6 +1079,37 @@ const TierTreePage = () => {
         </div>
       </header>
 
+      <div style={{ position: 'relative', marginBottom: '16px' }}>
+        <Input
+          placeholder="ツリー内を検索（名前・会社名・顧客ID）"
+          value={treeQuery}
+          onChange={e => setTreeQuery(e.target.value)}
+          containerStyle={{ marginBottom: 0 }}
+        />
+        {treeQuery.trim() && (
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: '4px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', boxShadow: 'var(--shadow-md)', zIndex: 50, maxHeight: '360px', overflowY: 'auto' }}>
+            {treeSearchResults.length === 0 ? (
+              <div style={{ padding: '14px 16px', color: 'var(--text-sub)', fontWeight: 700, fontSize: '0.85rem' }}>見つかりません</div>
+            ) : treeSearchResults.map(n => (
+              <button
+                key={n.key}
+                type="button"
+                onClick={() => { setTreeQuery(''); setScrollToCaseId(n.key); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', border: 'none', borderBottom: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}
+              >
+                <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                  {n.name}
+                  <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 700 }}>{n.id}</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600 }}>
+                  {[n.company && n.company !== n.name ? n.company : '', n.parentName ? `紹介者：${n.parentName}` : ''].filter(Boolean).join(' ／ ')}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--border)', marginBottom: '0' }}>
         <button
           onClick={() => setViewMode('list')}
@@ -1164,6 +1234,7 @@ const TierTreePage = () => {
               payoutMap={payoutData.byRecipient}
               visibleKeys={visibleKeys}
               isMobile={isMobile}
+              highlightedCaseId={highlightedCaseId}
             />
           )
         ) : (
